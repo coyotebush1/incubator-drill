@@ -74,11 +74,39 @@ final class PoolChunkListL<T> {
             }
         }
     }
+    
+    /**
+     * Shrink the buffer down to the specified size, freeing up unused memory.
+     * @param chunk - chunk the buffer resides in
+     * @param handle - the handle to the buffer
+     * @param size - the new desired "size"
+     * @return a new handle to the smaller buffer
+     */
+    long trim(PoolChunkL<T> chunk, long handle, int size) {
+    	
+    	// Trim the buffer, possibly getting a new handle.
+    	handle = chunk.trim(handle,  size);
+    	if (handle == -1) return handle;
+    	
+    	// Move the chunk to a different list if usage changed significantly
+    	if (chunk.usage() < minUsage) {
+    		assert chunk.usage() > 0 && prevList != null;
+    		remove(chunk);
+    		prevList.add(chunk);
+    	}
+    	
+    	// return new handle for the smaller buffer
+    	return handle;
+    }
 
     void add(PoolChunkL<T> chunk) {
-        if (chunk.usage() >= maxUsage) {
+    	int usage = chunk.usage();
+        if (usage >= maxUsage) {
             nextList.add(chunk);
             return;
+        } else if (usage < minUsage) {
+        	prevList.add(chunk);
+        	return;
         }
 
         chunk.parent = this;
