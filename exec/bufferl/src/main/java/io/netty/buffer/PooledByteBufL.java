@@ -157,6 +157,23 @@ abstract class PooledByteBufL<T> extends AbstractReferenceCountedByteBuf {
         }
     }
 
+    
+    /**
+     * Shrink the buffer to the desired size, freeing memory if possible.
+     * @param newLength - the desired (smaller) size
+     */
+    protected final void trim(int newLength) {
+    	// Trim the memory allocation
+    	long newHandle = chunk.arena.trim(chunk, handle, newLength);
+    	
+    	// if successful, reinitialize the buffer
+    	if (newHandle > 0) {
+    	    chunk.initBuf(this, newHandle, newLength);
+    	}
+    }
+    
+    
+    
     @SuppressWarnings("unchecked")
     private void recycle() {
         Recycler.Handle recyclerHandle = this.recyclerHandle;

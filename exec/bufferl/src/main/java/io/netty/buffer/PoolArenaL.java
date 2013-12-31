@@ -22,6 +22,30 @@ import io.netty.util.internal.StringUtil;
 
 import java.nio.ByteBuffer;
 
+
+/**
+ * A PoolArena is a memory allocator composed of other memory allocators
+ *   which preallocates some buffers to improve performance.
+ * More specifically, this PoolArena includes the following:
+ *   An ordered list of chunks in increasing utilization.
+ *        (approximated by several separate lists of chunks with different ranges of utilization)
+ *   A pool of pages for handling small+tiny requests quickly, one pool for each memory size.
+ *   
+ *   Allocation sizes are defined as follows:
+ *       HUGE allocations greater than 1 chunk.
+ *       normal allocations are 1 page to 1 chunk in size.
+ *       small allocations are powers of two, from 512 bytes to page size 
+ *       tiny allocations are 16 to 512 bytes in steps of 16.    
+ *  
+ *  huge allocations are passed directly to the operating system.
+ *  normal allocation returns a buffer consisting of 2^n pages from a single chunk.
+ *      normal allocations use the buddy system.
+ *  small allocations have a list of buffers for each small size, 512, 1024, 2048, ... pagesize/2.
+ *      small allocations reserve a whole page, divide it into fixed small buffers
+ *  tiny allocations range from 16 up to 512 in steps of 16 bytes.
+ *      they also reserve a whole page divided into fixed tiny buffers             
+ * @param <T>
+ */
 abstract class PoolArenaL<T> {
 
     final PooledByteBufAllocatorL parent;
@@ -133,25 +157,50 @@ abstract class PoolArenaL<T> {
         allocateNormal(buf, reqCapacity, normCapacity);
     }
 
+    
+    /**
+     * Allocate a "normal" sized buffer from the pool arena. (one or more pages from a chunk)
+     * @param buf - the receiver buf structure
+     * @param reqCapacity - the requested capacity in bytes
+     * @param normCapacity - the capacity we will actually allocate (bigger)
+     */
     private synchronized void allocateNormal(PooledByteBufL<T> buf, int reqCapacity, int normCapacity) {
+    	
+    	// If the buffer can be allocated from the regular pools, then do it.
         if (q050.allocate(buf, reqCapacity, normCapacity) || q025.allocate(buf, reqCapacity, normCapacity) ||
             q000.allocate(buf, reqCapacity, normCapacity) || qInit.allocate(buf, reqCapacity, normCapacity) ||
             q075.allocate(buf, reqCapacity, normCapacity) || q100.allocate(buf, reqCapacity, normCapacity)) {
             return;
         }
 
-        // Add a new chunk.
+        // Create a new chunk.
         PoolChunkL<T> c = newChunk(pageSize, maxOrder, pageShifts, chunkSize);
+        
+        // Allocate a buffer from the chunk
         long handle = c.allocate(normCapacity);
         assert handle > 0;
         c.initBuf(buf, handle, reqCapacity);
+        
+        // Append the new chunk to the "newly initialized" pool.
         qInit.add(c);
     }
 
+    
+    /**
+     * Allocate a huge (>chunksize) buffer.
+     * @param buf
+     * @param reqCapacity
+     */
     private void allocateHuge(PooledByteBufL<T> buf, int reqCapacity) {
         buf.initUnpooled(newUnpooledChunk(reqCapacity), reqCapacity);
     }
 
+    
+    /**
+     * Free a region of memory.
+     * @param chunk
+     * @param handle
+     */
     synchronized void free(PoolChunkL<T> chunk, long handle) {
         if (chunk.unpooled) {
             destroyChunk(chunk);
@@ -159,7 +208,25 @@ abstract class PoolArenaL<T> {
             chunk.parent.free(chunk, handle);
         }
     }
+    
+    
+    /**
+     * Reduce the size of the allocated buffer and free excess memory
+     * @param chunk - the chunk which holds the buffer
+     * @param handle - the handle to the buffer
+     * @param newSize - the desired new size
+     * @return a new handle to the smaller buffer, or -1 for no change.
+     */
+    synchronized long trim(PoolChunkL<T> chunk, long handle, int newSize) {
+    	return chunk.parent.trim(chunk, handle, newSize);
+    }
 
+    
+    /**
+     * Find which list holds subpage buffers of the given size.
+     * @param elemSize
+     * @return
+     */
     PoolSubpageL<T> findSubpagePoolHead(int elemSize) {
         int tableIdx;
         PoolSubpageL<T>[] table;
@@ -179,14 +246,24 @@ abstract class PoolArenaL<T> {
         return table[tableIdx];
     }
 
+    
+    
+    /**
+     * Bump the requested size up to the size which will actually be allocated
+     * @param reqCapacity - the requested size
+     * @return the large, normalized size
+     */
     private int normalizeCapacity(int reqCapacity) {
         if (reqCapacity < 0) {
             throw new IllegalArgumentException("capacity: " + reqCapacity + " (expected: 0+)");
         }
+        
+        // CASE: HUGE allocation, don't change it.
         if (reqCapacity >= chunkSize) {
             return reqCapacity;
         }
 
+        // CASE: normal or small allocation, then round up to 2^n
         if ((reqCapacity & 0xFFFFFE00) != 0) { // >= 512
             // Doubled
 
@@ -205,7 +282,7 @@ abstract class PoolArenaL<T> {
             return normalizedCapacity;
         }
 
-        // Quantum-spaced
+        // CASE: tiny allocations. Round up to the next multiple of 16
         if ((reqCapacity & 15) == 0) {
             return reqCapacity;
         }
