@@ -19,6 +19,11 @@ package org.apache.drill.exec.vector.allocator;
 
 import org.apache.drill.exec.vector.VariableWidthVector;
 
+/**
+ * Allocates buffers for a vector, total size matching the input vector
+ * @author jmorris
+ *
+ */
 class VariableVectorAllocator extends VectorAllocator{
   VariableWidthVector in;
   VariableWidthVector out;
@@ -29,6 +34,9 @@ class VariableVectorAllocator extends VectorAllocator{
     this.out = out;
   }
 
+  /**
+   * Allocate a buffer with the given record count and total size from input vector.
+   */
   public void alloc(int recordCount){
     out.allocateNew(in.getByteCapacity(), recordCount);
   }

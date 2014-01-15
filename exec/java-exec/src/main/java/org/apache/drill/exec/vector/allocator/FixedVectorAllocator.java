@@ -19,14 +19,25 @@ package org.apache.drill.exec.vector.allocator;
 
 import org.apache.drill.exec.vector.FixedWidthVector;
 
+/**
+ * Allocates data buffers for a fixed width vector.
+ */
 public class FixedVectorAllocator extends VectorAllocator{
   FixedWidthVector out;
   
+  /**
+   * Get the width of the items from the output vector
+   * @param out
+   */
   public FixedVectorAllocator(FixedWidthVector out) {
     super();
     this.out = out;
   }
 
+  
+  /**
+   * Allocate a buffer to hold the specified nr of records
+   */
   public void alloc(int recordCount){
     out.allocateNew(recordCount);
   }

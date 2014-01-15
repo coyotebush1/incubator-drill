@@ -27,6 +27,16 @@ import io.netty.util.ResourceLeakDetector;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
+/**
+ * A ByteBuf optimized to work with little endian direct buffers
+ * and the netty pool allocator. 
+ * The buffer can be of any size - tiny, small, normal, or huge.
+ * The class contains all information needed to free the memory
+ *   (which chunk, which pages, which elements).
+ *
+ * @param <T>
+ */
+
 abstract class PooledByteBufL<T> extends AbstractReferenceCountedByteBuf {
 
     private final ResourceLeak leak;
@@ -47,6 +57,14 @@ abstract class PooledByteBufL<T> extends AbstractReferenceCountedByteBuf {
         this.recyclerHandle = recyclerHandle;
     }
 
+    /**
+     * Initialize a new buffer for "normal" allocations.
+     * @param chunk - which chunk the buffer came from
+     * @param handle - which pages within the chunk
+     * @param offset - byte offset to the first page
+     * @param length - the requested length
+     * @param maxLength - the max limit for resizing.
+     */
     void init(PoolChunkL<T> chunk, long handle, int offset, int length, int maxLength) {
         assert handle >= 0;
         assert chunk != null;
@@ -78,11 +96,17 @@ abstract class PooledByteBufL<T> extends AbstractReferenceCountedByteBuf {
         return length;
     }
 
+    
+    /**
+     * Change the size of an allocated buffer, reallocating if appropriate.
+     * @param newCapacity
+     * @return
+     */
     @Override
     public final ByteBuf capacity(int newCapacity) {
         ensureAccessible();
 
-        // If the request capacity does not require reallocation, just update the length of the memory.
+        // Check for the easy resizing cases, and return if successfully resized.
         if (chunk.unpooled) {
             if (newCapacity == length) {
                 return this;
@@ -100,18 +124,21 @@ abstract class PooledByteBufL<T> extends AbstractReferenceCountedByteBuf {
                             length = newCapacity;
                             setIndex(Math.min(readerIndex(), newCapacity), Math.min(writerIndex(), newCapacity));
                             return this;
-                        }
+                        }        
                     } else { // > 512 (i.e. >= 1024)
                         length = newCapacity;
                         setIndex(Math.min(readerIndex(), newCapacity), Math.min(writerIndex(), newCapacity));
                         return this;
                     }
-                }
+                } 
             } else {
                 return this;
             }
         }
 
+        // Trim it down in size, if appropriate.
+        // TODO:
+        
         // Reallocation required.
         chunk.arena.reallocate(this, newCapacity, true);
         return this;
