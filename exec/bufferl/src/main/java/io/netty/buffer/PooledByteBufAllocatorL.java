@@ -228,6 +228,9 @@ public class PooledByteBufAllocatorL extends AbstractByteBufAllocator {
         }
     }
 
+    /**
+     * Allocate a buffer from the current thread's direct arena.
+     */
     @Override
     protected ByteBuf newDirectBuffer(int initialCapacity, int maxCapacity) {
         PoolThreadCacheL cache = threadCache.get();

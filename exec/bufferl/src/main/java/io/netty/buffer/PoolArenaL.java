@@ -24,8 +24,8 @@ import java.nio.ByteBuffer;
 
 
 /**
- * A PoolArena is a memory allocator composed of other memory allocators
- *   which preallocates some buffers to improve performance.
+ * A PoolArena is a memory allocator composed of other memory allocators.
+ *  
  * More specifically, this PoolArena includes the following:
  *   An ordered list of chunks in increasing utilization.
  *        (approximated by several separate lists of chunks with different ranges of utilization)
@@ -114,6 +114,10 @@ abstract class PoolArenaL<T> {
         return new PoolSubpageL[size];
     }
 
+    
+    /*
+     * Allocate a buffer from the current arena.
+     */
     PooledByteBufL<T> allocate(PoolThreadCacheL cache, int reqCapacity, int maxCapacity) {
         PooledByteBufL<T> buf = newByteBuf(maxCapacity);
         allocate(cache, buf, reqCapacity);
@@ -173,7 +177,7 @@ abstract class PoolArenaL<T> {
             return;
         }
 
-        // Create a new chunk.
+        // Create a new chunk
         PoolChunkL<T> c = newChunk(pageSize, maxOrder, pageShifts, chunkSize);
         
         // Allocate a buffer from the chunk
@@ -282,7 +286,7 @@ abstract class PoolArenaL<T> {
             return normalizedCapacity;
         }
 
-        // CASE: tiny allocations. Round up to the next multiple of 16
+        // OTHERWISE: tiny allocations. Round up to the next multiple of 16
         if ((reqCapacity & 15) == 0) {
             return reqCapacity;
         }

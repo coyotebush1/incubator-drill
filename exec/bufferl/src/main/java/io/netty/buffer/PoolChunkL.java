@@ -18,11 +18,42 @@
 package io.netty.buffer;
 
 
-/** A PoolChunk is a large piece of memory used by the Pool/Arena allocator. 
- * The chunk is subdivided into pages organized as a binary tree for Buddy System allocation,
- * and some pages are divided into arrays of fixed size subpages for subpage allocation.
+/** A Chunk is a large, fixed size piece of memory allocated from the operating system. 
+ * This PoolChunk allocator divides a chunk into a run of pages using the buddy system.
+ * The actual allocation will be the size requested, rounded up to the next 
+ * power-of-2.
+ * 
+ * This allocator does "normal" allocations, where the requested size varies
+ *    from page size to chunk size.
+ * 
+ * The allocator is based on buddy system. It views memory as a binary tree with
+ *     1 run of chunksize
+ *     2 runs of chunksize/2
+ *     4 runs of chunksize/4
+ *     ...
+ *     2^maxOrder runs of pagesize
+ *     
+ * Each node in the binary tree is labeled:
+ *     - unused.  The node and all its children are unallocated
+ *     - allocated. The node (and all its children) are allocated
+ *                  as a single request. The children remain marked "unused".
+ *     - branch. At least one descendent is allocated.
+ *     
+ * The binary tree is represented in the "memoryMap",
+ *   which saves the node status in a simple array without using links.
+ *   The array indices indicate the position within the tree as follows:
+ *     0 - unused
+ *     1 - root
+ *     2,3 - children of 1
+ *     4,5  6,7  - children of 2 and 3
+ *     8,9 10,11   12,13 14,15     - next level of children.
+ *     
+ * Note that i/2 points to the parent of i,  
+ *           i*2 points to left child, i*2+1 points to right child.    
  *
- * @param <T> the type of memory buffer to be allocated to user
+ * Note the current code also deals with smaller subpage allocations.
+ *    The overall memory manager only comes here when it wants a new page,
+ *    not every time it allocates a subpage piece of memory.
  */
 final class PoolChunkL<T> {
     private static final int ST_UNUSED = 0;
@@ -131,98 +162,93 @@ final class PoolChunkL<T> {
     
     /** 
      * Allocates a buffer of the given size from current chunk
-     * @param normCapacity - max capacity of the buffer
+     * @param capacity - requested capacity of the buffer
      * @return - handle to the buffer, -1 if failed
      */
-    long allocate(int normCapacity) {
+    long allocate(int capacity) {
+    	return allocate(capacity, capacity);
+    }
+    
+    
+    /**
+     * Allocates a buffer with size between minCapacity and maxCapacity.
+     * @param minCapacity
+     * @param maxCapacity
+     * @return
+     */
+    long allocate(int minCapacity, int maxCapacity) {
     	
-    	// If requested size is >= one page, then allocate a run of pages
-        int firstVal = memoryMap[1];
-        if ((normCapacity & subpageOverflowMask) != 0) { // >= pageSize
-            return allocateRun(normCapacity, 1, firstVal);
-            
-        // otherwise, allocate a subpage    
-        } else {
-            return allocateSubpage(normCapacity, 1, firstVal);
-        }
+    	// CASE: allocating runs of pages, make use of maxCapacity since we can trim it later
+    	if (minCapacity >= pageSize)   {
+    		return allocateRun(minCapacity, maxCapacity, 1, chunkSize);
+    	}
+    	
+    	// OTHERWISE: allocating subpage buffer. Not able to resize later, so ignore maxCapacity.
+    	else {
+    		return allocateSubpage(minCapacity, 1, memoryMap[1]);
+    	}
     }
 
     
+    
     /**
-     * Allocate a run of pages, starting at current location in tree  (1=root)
+     * Allocate a run of pages where the run size is within minCapacity thru maxCapacity.
+     * @param minCapacity - the minimum size of the buffer
+     * @param maxCapacity - the maximum size of the buffer
+     * @param node - the subtree to search
+     * @return handle to the allocated memory
      * 
-     * @param normCapacity - requested capacity adjusted to what will actually be allocated.
-     * @param curIdx - the starting node in the buddy tree
-     * @param val - the contents of the starting node
-     * @return a handle to the allocated run of pages
+     * More specifically, this routine finds an unused node in the binary tree,
+     *   s.t.  the node is big enough to contain minCapacity, and is not
+     *         bigger than the size to contain maxCapacity.
+     *         
+     * A node is the correct size to contain x bytes, if
+     *                size(node) == roundup-power-of-2(x)
+     *  equivalently, size(node) >= x  and   size(node.child) < x
+     *  equivalently, size(node) >= x  and   size(node)/2 < x    
      */
-    private long allocateRun(int normCapacity, int curIdx, int val) {
-        for (;;) {
-            if ((val & ST_ALLOCATED) != 0) { // state == ST_ALLOCATED || state == ST_ALLOCATED_SUBPAGE
-                return -1;
-            }
-
-            if ((val & ST_BRANCH) != 0) { // state == ST_BRANCH
-                int nextIdx = curIdx << 1 ^ nextRandom();
-                long res = allocateRun(normCapacity, nextIdx, memoryMap[nextIdx]);
-                if (res > 0) {
-                    return res;
-                }
-
-                curIdx = nextIdx ^ 1;
-                val = memoryMap[curIdx];
-                continue;
-            }
-
-            // state == ST_UNUSED
-            return allocateRunSimple(normCapacity, curIdx, val);
-        }
-    }
-
-    /**
-     * Allocate a run of pages from the current subtree, where the subtree is UNUSED.
-     * Takes advantage optimizations for unused case.
-     * @param normCapacity - the desired size, rounded up to what will be actually allocated
-     * @param curIdx - the memory map index we're starting from
-     * @param val - the memory map value corresponding to the index
-     * @return - a handle to the the new allocation, -1 if not possible.
-     */
-    private long allocateRunSimple(int normCapacity, int curIdx, int val) {
+    
+    long allocateRun(int minCapacity, int maxCapacity, int node, int runLength) {
     	
-    	// Verify our subtree can hold the desired capacity.
-        int runLength = runLength(val);
-        if (normCapacity > runLength) {
-            return -1;
+    	// Descend through the subtrees until finding an unused node which is big enough
+    	for (; runLength >= minCapacity; runLength /= 2) {
+    		if ((memoryMap[node]&3) != ST_BRANCH) break;
+    		
+            // Search one random subtree (recursively)
+    		int child = node*2 ^ nextRandom();
+    		long handle = allocateRun(minCapacity, maxCapacity, child, runLength/2);
+    		if (handle != -1) return handle;
+    			
+    		// If not found, search the other subtree (tail recursion) 
+    		node = child ^ 1;
+    	}
+    		
+    	// if we failed to find an unused node which is big enough, then failure.
+    	if (runLength < minCapacity || (memoryMap[node]&3) != ST_UNUSED) {
+    		return -1;
+    	}
+    	
+    	// At this point, we have an unused node which is big enough.
+    	//   In other words, it is larger than the minimum, but it may also be larger
+    	//   than the maximum. 
+    	
+    	// Continue descending subtree looking for a node which doesn't exceed the maximum
+        for (; runLength/2 >= maxCapacity; runLength/=2) {
+        	
+        	// We are about to allocate from one of our children, so we become BRANCH
+        	memoryMap[node] = (memoryMap[node]&~3) | ST_BRANCH;
+        	
+        	// Pick one of the children and continue descending its subtree.
+        	node = node * 2 + nextRandom();
         }
-
-        // Work down the tree until we have the desired node size
-        for (;;) {
-            if (normCapacity == runLength) {
-                // Found the run that fits.
-                // Note that capacity has been normalized already, so we don't need to deal with
-                // the values that are not power of 2.
-                memoryMap[curIdx] = val & ~3 | ST_ALLOCATED;
-                freeBytes -= runLength;
-                return curIdx;
-            }
-
-            // Pick a child at random. The run will come from the child.
-            int nextIdx = curIdx << 1 ^ nextRandom();
-            int unusedIdx = nextIdx ^ 1;
-
-            // We are the parent of the child, so we are now a BRANCH
-            memoryMap[curIdx] = val & ~3 | ST_BRANCH;
-            
-            // The sibling of the child remains unused 
-            memoryMap[unusedIdx] = memoryMap[unusedIdx] & ~3 | ST_UNUSED;   // TODO: Already UNUSED?
-
-            // End "Work down the tree until ..."
-            runLength >>>= 1;
-            curIdx = nextIdx;
-            val = memoryMap[curIdx];
-        }
+    	
+    	// We are finally at an unused node which isn't too small and isn't too large. Allocate it.
+        memoryMap[node] = (memoryMap[node]&~3) | ST_ALLOCATED;
+        freeBytes -= runLength;
+        return node;
     }
-
+    
+    
     
     
     

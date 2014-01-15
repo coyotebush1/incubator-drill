@@ -19,6 +19,13 @@ package io.netty.buffer;
 
 import io.netty.util.internal.StringUtil;
 
+
+/**
+ * A list of chunks with similar "usage".  If a chunk is added to the wrong list,
+ *    it will migrate to the next list which hopefully will be the correct one.
+ *
+ * @param <T>
+ */
 final class PoolChunkListL<T> {
     private final PoolArenaL<T> arena;
     private final PoolChunkListL<T> nextList;
@@ -32,6 +39,13 @@ final class PoolChunkListL<T> {
     // TODO: Test if adding padding helps under contention
     //private long pad0, pad1, pad2, pad3, pad4, pad5, pad6, pad7;
 
+    /**
+     * Create a new, empty pool of chunks.
+     * @param arena - the bigger arena this pool belongs to
+     * @param nextList - the next list to consider (in the same pool)
+     * @param minUsage - contains chunks with the specified usage (min ... max)
+     * @param maxUsage
+     */
     PoolChunkListL(PoolArenaL<T> arena, PoolChunkListL<T> nextList, int minUsage, int maxUsage) {
         this.arena = arena;
         this.nextList = nextList;
@@ -39,20 +53,36 @@ final class PoolChunkListL<T> {
         this.maxUsage = maxUsage;
     }
 
+    /**
+     * Allocate a buffer with the requested size
+     * @param buf - the container to hold the buffer
+     * @param reqCapacity - the requested capacity
+     * @param normCapacity - the requested capacity rounded up.
+     * @return
+     */
     boolean allocate(PooledByteBufL<T> buf, int reqCapacity, int normCapacity) {
+    	
+    	// If list is empty, then allocation fails
         if (head == null) {
             return false;
         }
 
+        // Do for each chunk in the list
         for (PoolChunkL<T> cur = head;;) {
+        	
+        	// If we successfully allocated from the chunk ...
             long handle = cur.allocate(normCapacity);
             if (handle < 0) {
                 cur = cur.next;
                 if (cur == null) {
                     return false;
                 }
+                
+            // ... then add the memory to the buffer container
             } else {
                 cur.initBuf(buf, handle, reqCapacity);
+                
+                // If usage changed, then move to next list
                 if (cur.usage() >= maxUsage) {
                     remove(cur);
                     nextList.add(cur);
@@ -62,8 +92,18 @@ final class PoolChunkListL<T> {
         }
     }
 
+    
+    /**
+     * Release a buffer back to the original chunk.
+     * @param chunk
+     * @param handle
+     */
     void free(PoolChunkL<T> chunk, long handle) {
+    	
+    	// Release buffer back to the original chunk
         chunk.free(handle);
+        
+        // If usage changed, then move to different list
         if (chunk.usage() < minUsage) {
             remove(chunk);
             if (prevList == null) {
@@ -99,7 +139,14 @@ final class PoolChunkListL<T> {
     	return handle;
     }
 
+    
+    /**
+     * Add a chunk to the current chunklist
+     * @param chunk
+     */
     void add(PoolChunkL<T> chunk) {
+    	
+    	// If usage has change, then add to the neighboring list instead
     	int usage = chunk.usage();
         if (usage >= maxUsage) {
             nextList.add(chunk);
@@ -109,6 +156,7 @@ final class PoolChunkListL<T> {
         	return;
         }
 
+        // Add chunk to linked list.
         chunk.parent = this;
         if (head == null) {
             head = chunk;
@@ -122,6 +170,11 @@ final class PoolChunkListL<T> {
         }
     }
 
+    
+    /**
+     * Remove a chunk from the current linked list of chunks
+     * @param cur
+     */
     private void remove(PoolChunkL<T> cur) {
         if (cur == head) {
             head = cur.next;
