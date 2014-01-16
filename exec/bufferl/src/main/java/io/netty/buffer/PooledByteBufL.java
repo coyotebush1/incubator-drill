@@ -136,10 +136,14 @@ abstract class PooledByteBufL<T> extends AbstractReferenceCountedByteBuf {
             }
         }
 
-        // Trim it down in size, if appropriate.
-        // TODO:
+        // Trim down the size of the current buffer, if able to.
+        long newHandle = chunk.parent.trim(chunk, handle,  newCapacity);
+        if (newHandle != -1) {
+        	chunk.initBuf(this, newHandle, newCapacity);
+        	return this;
+        }
         
-        // Reallocation required.
+        // Otherwise, reallocation required.
         chunk.arena.reallocate(this, newCapacity, true);
         return this;
     }
@@ -182,21 +186,6 @@ abstract class PooledByteBufL<T> extends AbstractReferenceCountedByteBuf {
                 recycle();
             }
         }
-    }
-
-    
-    /**
-     * Shrink the buffer to the desired size, freeing memory if possible.
-     * @param newLength - the desired (smaller) size
-     */
-    protected final void trim(int newLength) {
-    	// Trim the memory allocation
-    	long newHandle = chunk.arena.trim(chunk, handle, newLength);
-    	
-    	// if successful, reinitialize the buffer
-    	if (newHandle > 0) {
-    	    chunk.initBuf(this, newHandle, newLength);
-    	}
     }
     
     

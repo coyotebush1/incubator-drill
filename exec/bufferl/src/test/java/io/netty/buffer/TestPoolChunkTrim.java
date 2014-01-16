@@ -34,42 +34,63 @@ import org.junit.Test;
  *
  */
 public class TestPoolChunkTrim {
+	
+	static PooledByteBufAllocatorL arena = PooledByteBufAllocatorL.DEFAULT;
+	
+	static ByteBuf allocate(int min, int max) {
+		return arena.newDirectBuffer(min, max);
+	}
+	
+	
+	/** Display our thread's arena. The other arenas are not impacted by this test. */
+	public String toString() {
+		return arena.threadCache.get().directArena.toString();
+	}
+
+	
 
 	@Test
 	public void test() {
 		
-		// Create an arena for testing
-		DirectArena arena = new DirectArena(null, 1024, 10, 10, 1024*1024);
-		PooledByteBufL<ByteBuffer> block;
+		int pagesize=8192; // default
+		
+		ByteBuf block;
+
+		// Allocate the smallest normal block
+		block = allocate(pagesize/2+1, pagesize);
+	    System.out.printf("Allocated a normal block:  size=%d\n %s",  block.capacity(), toString());
+		block.release();
+		
 
 		
-		// Allocate a normal block
-		block = arena.allocate(null, 513, 1024);
-	    System.out.printf("Allocated a normal block\n %s",  arena.toString());
-		block.deallocate();
+		// Allocate and free the tiniest block
+		block = allocate(1, 1);
+		System.out.printf("Just allocated smallest tiny block size=%d\n%s", block.capacity(), toString());
+		block.release();
 		
-		// Allocate a large block
-		block = arena.allocate(null, 120*1024, 128*1024);
-		System.out.printf("Just allocated a large block\n%s", arena.toString());
-		
-		// Trim the block to a smaller size
-		block.trim(600);
-		System.out.printf("Just resized to a smaller block\n%s", arena.toString());
-		
-		// Free the block
-		block.deallocate();
-		System.out.printf("Freed the block: \n%s", arena.toString());
-		
-		
-		// Allocate and free a subpage block
-		block = arena.allocate(null, 511, 512);
-		System.out.printf("Just allocated a subpage block\n%s", arena.toString());
-		block.deallocate();
+		// Allocate and free a tiny block
+		block = allocate(255, 255);
+		System.out.printf("Just allocated a tiny block size=%d\n%s", block.capacity(), toString());
+		block.release();
 		
 		// Allocate and free a small block
-		block = arena.allocate(null, 256, 256);
-		System.out.printf("Just allocated a subpage block\n%s", arena.toString());
-		block.deallocate();
+		block = allocate(pagesize/2-1, pagesize/2-1);
+		System.out.printf("Just allocated largest small block size=%d\n%s", block.capacity(), toString());
+		block.release();
+
+		// Allocate a large block and trim to a single page
+		block = allocate(25*pagesize, 256*pagesize);
+		block = block.capacity(pagesize/2+1);
+		System.out.printf("Just resized to a single page: size=%d\n%s", block.capacity(), toString());
+		
+		// Trim the block to a tiny size.
+		block = block.capacity(31);
+		System.out.printf("Just resized to tiny block: size=%d\n%s", block.capacity(), toString());
+		
+		// Resize the tiny block to two pages
+		block = block.capacity(pagesize+1);
+		System.out.printf("Just resized to normal allocation: size=%d\n%s", block.capacity(), toString());
+		block.release();
 	}
 
 }
