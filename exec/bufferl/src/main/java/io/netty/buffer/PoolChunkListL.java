@@ -56,11 +56,11 @@ final class PoolChunkListL<T> {
     /**
      * Allocate a buffer with the requested size
      * @param buf - the container to hold the buffer
-     * @param reqCapacity - the requested capacity
-     * @param normCapacity - the requested capacity rounded up.
+     * @param minCapacity - the requested capacity
+     * @param maxCapacity - the requested capacity rounded up.
      * @return
      */
-    boolean allocate(PooledByteBufL<T> buf, int reqCapacity, int normCapacity) {
+    boolean allocate(PooledByteBufL<T> buf, int minCapacity, int maxCapacity) {
     	
     	// If list is empty, then allocation fails
         if (head == null) {
@@ -71,7 +71,7 @@ final class PoolChunkListL<T> {
         for (PoolChunkL<T> cur = head;;) {
         	
         	// If we successfully allocated from the chunk ...
-            long handle = cur.allocate(normCapacity);
+            long handle = cur.allocate(minCapacity, maxCapacity);
             if (handle < 0) {
                 cur = cur.next;
                 if (cur == null) {
@@ -80,7 +80,7 @@ final class PoolChunkListL<T> {
                 
             // ... then add the memory to the buffer container
             } else {
-                cur.initBuf(buf, handle, reqCapacity);
+                cur.initBuf(buf, handle, minCapacity, maxCapacity);
                 
                 // If usage changed, then move to next list
                 if (cur.usage() >= maxUsage) {
@@ -151,9 +151,9 @@ final class PoolChunkListL<T> {
         if (usage >= maxUsage) {
             nextList.add(chunk);
             return;
-        } else if (usage < minUsage) {
-        	prevList.add(chunk);
-        	return;
+        //} else if (usage < minUsage) {   // TODO: Could this result in a recursive loop?
+        //	prevList.add(chunk);
+        //	return;
         }
 
         // Add chunk to linked list.

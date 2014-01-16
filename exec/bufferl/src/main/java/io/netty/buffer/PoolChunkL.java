@@ -26,7 +26,7 @@ package io.netty.buffer;
  * This allocator does "normal" allocations, where the requested size varies
  *    from page size to chunk size.
  * 
- * The allocator is based on buddy system. It views memory as a binary tree with
+ * The allocator is based on buddy system. It views a chunk as a binary tree with
  *     1 run of chunksize
  *     2 runs of chunksize/2
  *     4 runs of chunksize/4
@@ -179,13 +179,14 @@ final class PoolChunkL<T> {
     long allocate(int minCapacity, int maxCapacity) {
     	
     	// CASE: allocating runs of pages, make use of maxCapacity since we can trim it later
-    	if (minCapacity >= pageSize)   {
+    	if (maxCapacity > pageSize/2)   {
     		return allocateRun(minCapacity, maxCapacity, 1, chunkSize);
     	}
     	
-    	// OTHERWISE: allocating subpage buffer. Not able to resize later, so ignore maxCapacity.
+    	// OTHERWISE: allocating subpage buffer. Special case: maxCapacity is normCapacity.
+    	//   Note: this case should be moved to PoolArena.
     	else {
-    		return allocateSubpage(minCapacity, 1, memoryMap[1]);
+    		return allocateSubpage(maxCapacity, 1, memoryMap[1]);
     	}
     }
 
@@ -360,7 +361,7 @@ final class PoolChunkL<T> {
  
     	// We can't trim if the result will become a subpage
     	if (smallerSize <= pageSize/2) {
-    		return -1;
+    		return -1; // TODO: Investigate - may be able to trim to a single page, even if result is tiny.
     	}
     	
     	// Starting at current node, follow left hand children, until reaching node of desired size.
@@ -434,17 +435,36 @@ final class PoolChunkL<T> {
         }
     }
 
-    
-    
     void initBuf(PooledByteBufL<T> buf, long handle, int reqCapacity) {
+    	initBuf(buf, handle, reqCapacity, reqCapacity);
+    }
+    
+    /**
+     * Initialize a buffer given a handle that was allocated from this chunk.
+     * @param buf       The buffer to be initialized.
+     * @param handle    The handle representing memory allocated from this chunk.
+     * @param minCapacity  The minimum requested capacity.
+     * @param maxCapacity   The maximum requested capacity.
+     */
+    void initBuf(PooledByteBufL<T> buf, long handle, int minCapacity, int maxCapacity) {
         int memoryMapIdx = (int) handle;
         int bitmapIdx = (int) (handle >>> 32);
+        
+        // If this is a normal allocation
         if (bitmapIdx == 0) {
+        	
+        	// Verify the memory is allocated
             int val = memoryMap[memoryMapIdx];
             assert (val & 3) == ST_ALLOCATED : String.valueOf(val & 3);
-            buf.init(this, handle, runOffset(val), reqCapacity, runLength(val));
+            
+            // Initialize buffer with as large as possible capacity within the requested range
+            //  (assert: we know the buffer is >= minCapacity)
+            int capacity = Math.min(runLength(val), maxCapacity);         
+            buf.init(this, handle, runOffset(val), capacity, runLength(val));
+            
+        // Otherwise initialize buffer as a subpage allocation.  
         } else {
-            initBufWithSubpage(buf, handle, bitmapIdx, reqCapacity);
+            initBufWithSubpage(buf, handle, bitmapIdx, minCapacity);
         }
     }
 
