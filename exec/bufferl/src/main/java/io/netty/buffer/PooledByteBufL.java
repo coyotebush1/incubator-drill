@@ -143,11 +143,21 @@ abstract class PooledByteBufL<T> extends AbstractReferenceCountedByteBuf {
         	return this;
         }
         
-        // Otherwise, reallocation required.
+
+        // Reallocate the data.
+        int originalLength = length;
         chunk.arena.reallocate(this, newCapacity, true);
+        
+        // Throw an exception if we copied more than a page of data.
+        int copyAmount = Math.min(originalLength,  length);
+        if (copyAmount > chunk.getPageSize())
+        	throw new TooMuchCopyingException("Reallocation: too much copying: " + copyAmount);
+        
         return this;
     }
 
+    
+    
     @Override
     public final ByteBufAllocator alloc() {
         return chunk.arena.parent;
@@ -155,7 +165,7 @@ abstract class PooledByteBufL<T> extends AbstractReferenceCountedByteBuf {
 
     @Override
     public final ByteOrder order() {
-        return ByteOrder.BIG_ENDIAN;
+        return ByteOrder.BIG_ENDIAN; // TODO:  Is this correct?
     }
 
     @Override
@@ -173,6 +183,10 @@ abstract class PooledByteBufL<T> extends AbstractReferenceCountedByteBuf {
 
     protected abstract ByteBuffer newInternalNioBuffer(T memory);
 
+    
+    /**
+     * Free the memory and recycle the header.
+     */
     @Override
     protected final void deallocate() {
         if (handle >= 0) {
@@ -203,4 +217,16 @@ abstract class PooledByteBufL<T> extends AbstractReferenceCountedByteBuf {
     protected final int idx(int index) {
         return offset + index;
     }
+}
+
+
+/**
+ * Exception thrown after resizing a buffer results in excessive copying.
+ *   The buffer has been properly resized, so It is possible to ignore the exception and continue.
+ */
+class TooMuchCopyingException extends IllegalArgumentException {
+	private static final long serialVersionUID = -8184712014469036532L;
+	TooMuchCopyingException(String s) {
+		super(s);
+	}
 }

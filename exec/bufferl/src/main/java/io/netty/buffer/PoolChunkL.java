@@ -18,7 +18,8 @@
 package io.netty.buffer;
 
 
-/** A Chunk is a large, fixed size piece of memory allocated from the operating system. 
+/** 
+ * A Chunk is a large, fixed size piece of memory allocated from the operating system. 
  * This PoolChunk allocator divides a chunk into a run of pages using the buddy system.
  * The actual allocation will be the size requested, rounded up to the next 
  * power-of-2.
@@ -27,9 +28,9 @@ package io.netty.buffer;
  *    from page size to chunk size.
  * 
  * The allocator is based on buddy system. It views a chunk as a binary tree with
- *     1 run of chunksize
- *     2 runs of chunksize/2
- *     4 runs of chunksize/4
+ *     1 run of chunksize, or
+ *     2 runs of chunksize/2, or
+ *     4 runs of chunksize/4, or
  *     ...
  *     2^maxOrder runs of pagesize
  *     
@@ -48,8 +49,8 @@ package io.netty.buffer;
  *     4,5  6,7  - children of 2 and 3
  *     8,9 10,11   12,13 14,15     - next level of children.
  *     
- * Note that i/2 points to the parent of i,  
- *           i*2 points to left child, i*2+1 points to right child.    
+ * Thus, i/2 points to the parent of i,  
+ *       i*2 points to left child, i*2+1 points to right child.    
  *
  * Note the current code also deals with smaller subpage allocations.
  *    The overall memory manager only comes here when it wants a new page,
@@ -140,6 +141,7 @@ final class PoolChunkL<T> {
         maxSubpageAllocs = 0;
     }
 
+    /** Creates an uninitialized array of subpage lists */
     @SuppressWarnings("unchecked")
     private PoolSubpageL<T>[] newSubpageArray(int size) {
         return new PoolSubpageL[size];
@@ -172,21 +174,21 @@ final class PoolChunkL<T> {
     
     /**
      * Allocates a buffer with size between minCapacity and maxCapacity.
-     * @param minCapacity
-     * @param maxCapacity
+     * @param minAllocated
+     * @param maxAllocated
      * @return
      */
-    long allocate(int minCapacity, int maxCapacity) {
+    long allocate(int minAllocated, int maxAllocated) {
     	
     	// CASE: allocating runs of pages, make use of maxCapacity since we can trim it later
-    	if (maxCapacity > pageSize/2)   {
-    		return allocateRun(minCapacity, maxCapacity, 1, chunkSize);
+    	if (maxAllocated > pageSize/2)   {
+    		return allocateRun(minAllocated, maxAllocated, 1, chunkSize);
     	}
     	
     	// OTHERWISE: allocating subpage buffer. Special case: maxCapacity is normCapacity.
     	//   Note: this case should be moved to PoolArena.
     	else {
-    		return allocateSubpage(maxCapacity, 1, memoryMap[1]);
+    		return allocateSubpage(maxAllocated, 1, memoryMap[1]);
     	}
     }
 
@@ -194,9 +196,9 @@ final class PoolChunkL<T> {
     
     /**
      * Allocate a run of pages where the run size is within minCapacity thru maxCapacity.
-     * @param minCapacity - the minimum size of the buffer
-     * @param maxCapacity - the maximum size of the buffer
-     * @param node - the subtree to search
+     * @param minAllocated - the minimum size of the buffer
+     * @param maxAllocated - the maximum size of the buffer to be allocated if convenient
+     * @param node - the subtree of this chunk to search
      * @return handle to the allocated memory
      * 
      * More specifically, this routine finds an unused node in the binary tree,
@@ -208,16 +210,15 @@ final class PoolChunkL<T> {
      *  equivalently, size(node) >= x  and   size(node.child) < x
      *  equivalently, size(node) >= x  and   size(node)/2 < x    
      */
-    
-    long allocateRun(int minCapacity, int maxCapacity, int node, int runLength) {
+    long allocateRun(int minAllocated, int maxAllocated, int node, int runLength) {
     	
     	// Descend through the subtrees until finding an unused node which is big enough
-    	for (; runLength >= minCapacity; runLength /= 2) {
+    	for (; runLength >= minAllocated; runLength /= 2) {
     		if ((memoryMap[node]&3) != ST_BRANCH) break;
     		
             // Search one random subtree (recursively)
     		int child = node*2 ^ nextRandom();
-    		long handle = allocateRun(minCapacity, maxCapacity, child, runLength/2);
+    		long handle = allocateRun(minAllocated, maxAllocated, child, runLength/2);
     		if (handle != -1) return handle;
     			
     		// If not found, search the other subtree (tail recursion) 
@@ -225,7 +226,7 @@ final class PoolChunkL<T> {
     	}
     		
     	// if we failed to find an unused node which is big enough, then failure.
-    	if (runLength < minCapacity || (memoryMap[node]&3) != ST_UNUSED) {
+    	if (runLength < minAllocated || (memoryMap[node]&3) != ST_UNUSED) {
     		return -1;
     	}
     	
@@ -234,7 +235,7 @@ final class PoolChunkL<T> {
     	//   than the maximum. 
     	
     	// Continue descending subtree looking for a node which doesn't exceed the maximum
-        for (; runLength/2 >= maxCapacity; runLength/=2) {
+        for (; runLength/2 >= maxAllocated; runLength/=2) {
         	
         	// We are about to allocate from one of our children, so we become BRANCH
         	memoryMap[node] = (memoryMap[node]&~3) | ST_BRANCH;
@@ -254,8 +255,9 @@ final class PoolChunkL<T> {
     
     
     /**
-     * Allocate a new page to be used to store subpage buffers.
-     *   Note: not sure why it doesn't call allocateRun to do the page allocation.
+     * Allocate a new page for splitting into subpage items.
+     *   Note: this routine doesn't belong here. Instead, we should have a "subpage" allocator 
+     *   which is invoked instead of us and is responsible for the entire subpage allocation sizes.
      * @param normCapacity - the actual size of the buffer we will allocate
      * @param curIdxn - the node where our search stargs
      * @param val - contents of the current node
@@ -339,10 +341,14 @@ final class PoolChunkL<T> {
     }
     
     /**
-     * Reduce the size of a buffer to the desired size, freeing up excess memory if possible.
-     * @param handle
-     * @param smallerSize
-     * @return a new handle to the smaller buffer, or -1 if can't resize
+     * Free up memory to reduce the size of a run of pages.
+     *     The resulting run starts on the same page, and
+     *     the trailing pages are returned to the memory manager.
+     *     Trim is intended to be an efficient way to reduce the size of a buffer.
+     *     No new memory is allocated, nor is any data copied.
+     * @param handle - which run of pages was allocated from the current chunk
+     * @param smallerSize - the new desired size the new run of pages
+     * @return a new handle to the smaller run of pages, or -1 if can't trim.
      */
     long trim(long handle, int smallerSize) {
     	int memoryMapIdx = (int) handle;
@@ -361,7 +367,12 @@ final class PoolChunkL<T> {
  
     	// We can't trim if the result will become a subpage
     	if (smallerSize <= pageSize/2) {
-    		return -1; // TODO: Investigate - may be able to trim to a single page, even if result is tiny.
+    		return -1;
+    	}
+       	
+    	// If the buffer is growing, then we aren't really trimming.
+    	if (smallerSize >= originalRunLength) {
+    		return -1;
     	}
     	
     	// Starting at current node, follow left hand children, until reaching node of desired size.
@@ -526,4 +537,8 @@ final class PoolChunkL<T> {
         buf.append(')');
         return buf.toString();
     }
+
+	public int getPageSize() {
+		return pageSize;
+	}
 }
