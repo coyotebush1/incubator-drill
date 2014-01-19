@@ -125,14 +125,23 @@ abstract class PoolArenaL<T> {
     
     /**
      * Allocate a buffer from the current arena.
+     * Unlike netty.io buffers, this buffer can grow without bounds,
+     * but it will throw an exception if growth involves copying a page 
+     * or more of data. Instead of being an upper bounds sanity check,
+     * the "max" capacity is used to opportunistically allocate extra memory.
+     * Later, the capacity can be reduced very efficiently.
+     * To avoid excessive copying, a buffer cannot grow if it must copy
+     * more than a single page of data.
      * @param cache   TODO: not sure
-     * @param minCapacity  The smallest capacity buffer we want
-     * @param maxCapacity  If convenient, allocate up to this capacity
+     * @param minAllocated  The smallest capacity buffer we want
+     * @param maxAllocated  If convenient, allocate up to this capacity
      * @return A buffer with capacity between min and max capacity
      */
-    PooledByteBufL<T> allocate(PoolThreadCacheL cache, int minCapacity, int maxCapacity) {
-        PooledByteBufL<T> buf = newByteBuf(maxCapacity);
-        allocate(cache, buf, minCapacity, maxCapacity);
+    PooledByteBufL<T> allocate(PoolThreadCacheL cache, int minAllocated, int maxAllocated) {
+    	
+    	// Create a buffer header, limiting growth to minimize copying
+        PooledByteBufL<T> buf = newByteBuf(Integer.MAX_VALUE);
+        allocate(cache, buf, minAllocated, maxAllocated);
         return buf;
     }
 
@@ -140,10 +149,10 @@ abstract class PoolArenaL<T> {
      * Allocate memory to a buffer container.
      * @param cache TODO: not sure
      * @param buf - A buffer which will contain the allocated memory
-     * @param minCapacity - The smallest amount of memory.
-     * @param maxCapacity - The maximum memory to allocate if convenient.
+     * @param minAllocated - The smallest amount of memory.
+     * @param maxAllocated - The maximum memory to allocate if convenient.
      */
-    private void allocate(PoolThreadCacheL cache, PooledByteBufL<T> buf, final int minCapacity, int maxCapacity) {
+    private void allocate(PoolThreadCacheL cache, PooledByteBufL<T> buf, final int minAllocated, int maxAllocated) {
     	//   This code should be reorganized.
     	//        case: <= maxTiny:   allocateTiny{select which tiny list, allocate subpage from list.}
     	//        case: <= maxSmall:  allocateSmall{select which small list, allocate subpage from list.}
@@ -152,7 +161,7 @@ abstract class PoolArenaL<T> {
     	//   where maxTiny=256, maxSmall=pageSize/2, maxNormal=chunkSize.
     	
     	// CASE: minCapacity is a subpage
-    	final int normCapacity = normalizeCapacity(minCapacity);
+    	final int normCapacity = normalizeCapacity(minAllocated);
         if ((normCapacity & subpageOverflowMask) == 0) { // minCapacity <= pageSize/2
             int tableIdx;
             PoolSubpageL<T>[] table;
@@ -181,7 +190,7 @@ abstract class PoolArenaL<T> {
                     assert s.doNotDestroy && s.elemSize == normCapacity;
                     long handle = s.allocate();
                     assert handle >= 0;
-                    s.chunk.initBufWithSubpage(buf, handle, minCapacity);
+                    s.chunk.initBufWithSubpage(buf, handle, minAllocated);
                     return;
                 }
             }
@@ -191,32 +200,32 @@ abstract class PoolArenaL<T> {
             //   and it really shouldn't know anything at all about subpages.
             //   Instead, we should allocate a complete page and 
             //   add it to the desired list ourselves.
-            allocateNormal(buf, minCapacity, normCapacity);
+            allocateNormal(buf, minAllocated, normCapacity);
             return;
             
         // CASE:  HUGE allocation.     
         } else if (normCapacity > chunkSize) {
-            allocateHuge(buf, minCapacity);
+            allocateHuge(buf, minAllocated);
             return;
         }
 
         // OTHERWISE: Normal allocation of pages from a chunk.
-        allocateNormal(buf, minCapacity, maxCapacity);
+        allocateNormal(buf, minAllocated, maxAllocated);
     }
 
     
     /**
      * Allocate a "normal" (page .. chunk) sized buffer from a chunk in the skiplist.
      * @param buf - the buffer header which will receive the memory.
-     * @param minCapacity - the minimum requested capacity in bytes.
-     * @param maxCapacity - the maximum requested capacity.
+     * @param minAllocated - the minimum requested capacity in bytes.
+     * @param maxAllocated - the maximum requested capacity.
      */
-    private synchronized void allocateNormal(PooledByteBufL<T> buf, int minCapacity, int maxCapacity) {
+    private synchronized void allocateNormal(PooledByteBufL<T> buf, int minAllocated, int maxAllocated) {
     	
     	// If the buffer can be allocated from the skip list, then allocate it.
-        if (q050.allocate(buf, minCapacity, maxCapacity) || q025.allocate(buf, minCapacity, maxCapacity) ||
-            q000.allocate(buf, minCapacity, maxCapacity) || qInit.allocate(buf, minCapacity, maxCapacity) ||
-            q075.allocate(buf, minCapacity, maxCapacity) || q100.allocate(buf, minCapacity, maxCapacity)) {
+        if (q050.allocate(buf, minAllocated, maxAllocated) || q025.allocate(buf, minAllocated, maxAllocated) ||
+            q000.allocate(buf, minAllocated, maxAllocated) || qInit.allocate(buf, minAllocated, maxAllocated) ||
+            q075.allocate(buf, minAllocated, maxAllocated) || q100.allocate(buf, minAllocated, maxAllocated)) {
             return;
         }
 
@@ -224,9 +233,9 @@ abstract class PoolArenaL<T> {
         PoolChunkL<T> c = newChunk(pageSize, maxOrder, pageShifts, chunkSize);
         
         // Allocate a buffer from the chunk.
-        long handle = c.allocate(minCapacity, maxCapacity);
+        long handle = c.allocate(minAllocated, maxAllocated);
         assert handle > 0;
-        c.initBuf(buf, handle, minCapacity, maxCapacity);
+        c.initBuf(buf, handle, minAllocated, maxAllocated);
         
         // Add the new chunk to the skip list at the "newly initialized" location.
         qInit.add(c);
@@ -449,7 +458,7 @@ abstract class PoolArenaL<T> {
         }
         buf.append(StringUtil.NEWLINE);
         buf.append("small subpages:");
-        for (int i = 1; i < smallSubpagePools.length; i ++) {
+        for (int i = 0; i < smallSubpagePools.length; i ++) {
             PoolSubpageL<T> head = smallSubpagePools[i];
             if (head.next == head) {
                 continue;
