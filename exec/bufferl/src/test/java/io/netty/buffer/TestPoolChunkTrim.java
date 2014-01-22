@@ -28,48 +28,20 @@ import org.junit.Test;
  */
 public class TestPoolChunkTrim {
 	
-	/** Point to the default allocator */
+    /** Points to the default allocator */
 	static PooledByteBufAllocatorL allocator = PooledByteBufAllocatorL.DEFAULT;
 	
-	/** Point to the main thread's arena */
-	static PoolArenaL<ByteBuffer> arena = allocator.threadCache.get().directArena;
-	
-	/** Allocate a buffer with capacity between min and max */
+    /** Helper to allocate a buffer with capacity between min and max */
 	static ByteBuf allocate(int min, int max) {
 		return allocator.newDirectBuffer(min, max);
 	}
+	
+    /** Helper to allocate a buffer with fixed size capacity */
 	static ByteBuf allocate(int size) {
 		return allocate(size, size);
 	}
 	
-	
-	/** 
-	 * Verify one line of our current state matches the pattern 
-	 */
-	void assertMatch(String pattern) {
-		
-		// Get our current state as a string
-		String s = toString();
-	
-		// Do for each line in the string
-		for (int f=0, l=s.indexOf('\n',f); l != -1; f=l+1, l=s.indexOf('\n',f)) {
-			
-			// if the line contains pattern, then success.
-			if (s.substring(f,l).matches(".*"+pattern+".*")) return;
-		}
-		
-		// We didn't find a matching line, so fail the test
-		Assert.fail("Test failed to match pattern " + pattern);
-	}
-	
-	
-	
-	/** Display our thread's arena. The other arenas are not impacted by this test. */
-	public String toString() {
-		return arena.toString();
-	}
 
-	
 
 	/**
 	 * Unit test the memory allocator and trim() function.
@@ -81,6 +53,10 @@ public class TestPoolChunkTrim {
 	 *      "Chunk ... <bytes consumed>/".
 	 * The subpage allocators are verified by matching with
 	 *      "<nr allocated>/ ... elemSize: <size>"
+	 *      	 *   
+	 *   A cleaner approach would create new methods to query
+	 *      - how many pages (total) have been allocated, and
+	 *      - how many elements of a particular size have been allocated.   
 	 */
 	@Test
 	public void test() {
@@ -91,15 +67,15 @@ public class TestPoolChunkTrim {
 
 		// Allocate and free a single page
 		block = allocate(pageSize/2+1);
-	    assertMatch("Chunk.* 8192/");
+	    assertMatch("Chunk.* 8192/");   // Verify a single page allocated.
 		block.release();
-		assertMatch("Chunk.* 0/");
+		assertMatch("Chunk.* 0/");      // Verify the single page freed, and chunk still exists.
 		
 		// Allocate and free the tiniest tiny subpage
 		block = allocate(1);
-		assertMatch("1/.*elemSize: 16");
+		assertMatch("1/.*elemSize: 16"); // Verify one element of size 16 has been allocated.
 		block.release();
-		assertMatch("0/.*elemSize: 16"); 
+		assertMatch("0/.*elemSize: 16"); // Verify element has been freed, but page is still in pool.
 		
 		// Allocate and free the largest tiny subpage
 		block = allocate(512-16-15);
@@ -148,4 +124,36 @@ public class TestPoolChunkTrim {
 		
 		System.out.printf("All memory has been released:\n%s\n", toString());
 	}
+	
+	
+	
+	/** 
+	 * Verify our current state matches the pattern. 
+	 * 
+	 * Note: Uses the existing "toString()" method and extracts information
+	 *   by matching a pattern to one of the output lines.
+	 */
+    void assertMatch(String pattern) {
+		
+        // Get our current state as a string
+		String s = toString();
+	
+		// Do for each line in the string
+		for (int f=0, l=s.indexOf('\n',f); l != -1; f=l+1, l=s.indexOf('\n',f)) {
+			
+			// if the line contains pattern, then success.
+			if (s.substring(f,l).matches(".*"+pattern+".*")) return;
+		}
+		
+		// We didn't find a matching line, so fail the test
+		Assert.fail("Test failed to match pattern " + pattern);
+	}
+
+	
+	/** Display our thread's arena. The other arenas are not impacted by this test. */
+	public String toString() {
+		return allocator.threadCache.get().directArena.toString();
+	}
+
+	
 }

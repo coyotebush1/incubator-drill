@@ -173,22 +173,22 @@ final class PoolChunkL<T> {
     
     
     /**
-     * Allocates a buffer with size between minCapacity and maxCapacity.
-     * @param minAllocated
-     * @param maxAllocated
+     * Allocates a buffer with size between minRequested and maxRequested
+     * @param minRequested
+     * @param maxRequested
      * @return
      */
-    long allocate(int minAllocated, int maxAllocated) {
+    long allocate(int minRequested, int maxRequested) {
     	
     	// CASE: allocating runs of pages, make use of maxCapacity since we can trim it later
-    	if (maxAllocated > pageSize/2)   {
-    		return allocateRun(minAllocated, maxAllocated, 1, chunkSize);
+    	if (maxRequested > pageSize/2)   {
+    		return allocateRun(minRequested, maxRequested, 1, chunkSize);
     	}
     	
     	// OTHERWISE: allocating subpage buffer. Special case: maxCapacity is normCapacity.
     	//   Note: this case should be moved to PoolArena.
     	else {
-    		return allocateSubpage(maxAllocated, 1, memoryMap[1]);
+    		return allocateSubpage(maxRequested, 1, memoryMap[1]);
     	}
     }
 
@@ -196,8 +196,8 @@ final class PoolChunkL<T> {
     
     /**
      * Allocate a run of pages where the run size is within minCapacity thru maxCapacity.
-     * @param minAllocated - the minimum size of the buffer
-     * @param maxAllocated - the maximum size of the buffer to be allocated if convenient
+     * @param minRequested - the minimum size of the buffer
+     * @param maxRequested - the maximum size of the buffer to be allocated if convenient
      * @param node - the subtree of this chunk to search
      * @return handle to the allocated memory
      * 
@@ -210,15 +210,15 @@ final class PoolChunkL<T> {
      *  equivalently, size(node) >= x  and   size(node.child) < x
      *  equivalently, size(node) >= x  and   size(node)/2 < x    
      */
-    long allocateRun(int minAllocated, int maxAllocated, int node, int runLength) {
+    long allocateRun(int minRequested, int maxRequested, int node, int runLength) {
     	
     	// Descend through the subtrees until finding an unused node which is big enough
-    	for (; runLength >= minAllocated; runLength /= 2) {
+    	for (; runLength >= minRequested; runLength /= 2) {
     		if ((memoryMap[node]&3) != ST_BRANCH) break;
     		
             // Search one random subtree (recursively)
     		int child = node*2 ^ nextRandom();
-    		long handle = allocateRun(minAllocated, maxAllocated, child, runLength/2);
+    		long handle = allocateRun(minRequested, maxRequested, child, runLength/2);
     		if (handle != -1) return handle;
     			
     		// If not found, search the other subtree (tail recursion) 
@@ -226,7 +226,7 @@ final class PoolChunkL<T> {
     	}
     		
     	// if we failed to find an unused node which is big enough, then failure.
-    	if (runLength < minAllocated || (memoryMap[node]&3) != ST_UNUSED) {
+    	if (runLength < minRequested || (memoryMap[node]&3) != ST_UNUSED) {
     		return -1;
     	}
     	
@@ -235,7 +235,7 @@ final class PoolChunkL<T> {
     	//   than the maximum. 
     	
     	// Continue descending subtree looking for a node which doesn't exceed the maximum
-        for (; runLength/2 >= maxAllocated; runLength/=2) {
+        for (; runLength/2 >= maxRequested; runLength/=2) {
         	
         	// We are about to allocate from one of our children, so we become BRANCH
         	memoryMap[node] = (memoryMap[node]&~3) | ST_BRANCH;
@@ -454,10 +454,10 @@ final class PoolChunkL<T> {
      * Initialize a buffer given a handle that was allocated from this chunk.
      * @param buf       The buffer to be initialized.
      * @param handle    The handle representing memory allocated from this chunk.
-     * @param minCapacity  The minimum requested capacity.
-     * @param maxCapacity   The maximum requested capacity.
+     * @param minRequested  The minimum requested capacity.
+     * @param maxRequested   The maximum requested capacity.
      */
-    void initBuf(PooledByteBufL<T> buf, long handle, int minCapacity, int maxCapacity) {
+    void initBuf(PooledByteBufL<T> buf, long handle, int minRequested, int maxRequested) {
         int memoryMapIdx = (int) handle;
         int bitmapIdx = (int) (handle >>> 32);
         
@@ -470,12 +470,12 @@ final class PoolChunkL<T> {
             
             // Initialize buffer with as large as possible capacity within the requested range
             //  (assert: we know the buffer is >= minCapacity)
-            int capacity = Math.min(runLength(val), maxCapacity);         
+            int capacity = Math.min(runLength(val), maxRequested);         
             buf.init(this, handle, runOffset(val), capacity, runLength(val));
             
         // Otherwise initialize buffer as a subpage allocation.  
         } else {
-            initBufWithSubpage(buf, handle, bitmapIdx, minCapacity);
+            initBufWithSubpage(buf, handle, bitmapIdx, minRequested);
         }
     }
 

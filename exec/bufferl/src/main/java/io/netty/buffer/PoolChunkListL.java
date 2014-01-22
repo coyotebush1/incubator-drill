@@ -56,11 +56,11 @@ final class PoolChunkListL<T> {
     /**
      * Allocate a buffer with the requested size
      * @param buf - the container to hold the buffer
-     * @param minCapacity - the requested capacity
-     * @param maxCapacity - the requested capacity rounded up.
+     * @param minRequested - the minumum requested capacity
+     * @param maxRequested - the maximum capacity
      * @return
      */
-    boolean allocate(PooledByteBufL<T> buf, int minCapacity, int maxCapacity) {
+    boolean allocate(PooledByteBufL<T> buf, int minRequested, int maxRequested) {
     	
     	// If list is empty, then allocation fails
         if (head == null) {
@@ -71,7 +71,7 @@ final class PoolChunkListL<T> {
         for (PoolChunkL<T> cur = head;;) {
         	
         	// If we successfully allocated from the chunk ...
-            long handle = cur.allocate(minCapacity, maxCapacity);
+            long handle = cur.allocate(minRequested, maxRequested);
             if (handle < 0) {
                 cur = cur.next;
                 if (cur == null) {
@@ -80,7 +80,7 @@ final class PoolChunkListL<T> {
                 
             // ... then add the memory to the buffer container
             } else {
-                cur.initBuf(buf, handle, minCapacity, maxCapacity);
+                cur.initBuf(buf, handle, minRequested, maxRequested);
                 
                 // If usage changed, then move to next list
                 if (cur.usage() >= maxUsage) {

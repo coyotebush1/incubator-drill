@@ -232,11 +232,11 @@ public class PooledByteBufAllocatorL extends AbstractByteBufAllocator {
      * Allocate a buffer from the current thread's direct arena.
      */
     @Override
-    protected ByteBuf newDirectBuffer(int minAllocated, int maxAllocated) {
+    protected ByteBuf newDirectBuffer(int minRequested, int maxRequested) {
         PoolThreadCacheL cache = threadCache.get();
         PoolArenaL<ByteBuffer> directArena = cache.directArena;
         if (directArena != null) {
-            return directArena.allocate(cache, minAllocated, maxAllocated);
+            return directArena.allocate(cache, minRequested, maxRequested);
         } else {
             if (PlatformDependent.hasUnsafe()) {
               throw new UnsupportedOperationException();
