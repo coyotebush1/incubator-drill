@@ -228,6 +228,19 @@ public class PooledByteBufAllocatorL extends AbstractByteBufAllocator {
         }
     }
 
+    
+    /**
+     * Override the abstract allocator. Normally, the abstract allocator
+     * defaults the second parameter to MAXINT as a "sanity check", but we
+     * have reinterpreted the second parameter as "max requested".
+     */
+    @Override
+    public ByteBuf directBuffer(int request) {
+    	return directBuffer(request, request);
+    }
+    
+    
+    
     /**
      * Allocate a buffer from the current thread's direct arena.
      */

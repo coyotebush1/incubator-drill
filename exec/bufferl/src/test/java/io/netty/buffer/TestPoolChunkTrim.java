@@ -28,20 +28,20 @@ import org.junit.Test;
  */
 public class TestPoolChunkTrim {
 	
-    /** Points to the default allocator */
-	static PooledByteBufAllocatorL allocator = PooledByteBufAllocatorL.DEFAULT;
+	int pageSize=8192; // default
 	
-    /** Helper to allocate a buffer with capacity between min and max */
-	static ByteBuf allocate(int min, int max) {
-		return allocator.newDirectBuffer(min, max);
+	/** A convenience method to do all the tests. */
+	public void test() {
+		singlePageTest();
+		tiniestTinyTest();
+		largestTinyTest();
+		smallestSmallTest();
+		largestSmallTest();
+		trimTest();
+		trimTiny();
+		tinyGrow();
+		growException();
 	}
-	
-    /** Helper to allocate a buffer with fixed size capacity */
-	static ByteBuf allocate(int size) {
-		return allocate(size, size);
-	}
-	
-
 
 	/**
 	 * Unit test the memory allocator and trim() function.
@@ -58,102 +58,184 @@ public class TestPoolChunkTrim {
 	 *      - how many pages (total) have been allocated, and
 	 *      - how many elements of a particular size have been allocated.   
 	 */
+	
+	/** Allocate and free a single page */
 	@Test
-	public void test() {
+	public void singlePageTest() {
+        normalTest(pageSize/2+1, pageSize, 1);
+	}
+	
+	/** Allocate and free a larger run of pages */
+	@Test
+	public void multiPageTest() {
+		normalTest(pageSize*25+1, pageSize*31+1, 32);
+	}
+	
+	/** Allocate and free the tiniest tiny allocation */
+	@Test
+	public void tiniestTinyTest() {
+		subpageTest(1, 1, 16);
+	}
+	
+	/** Allocate and free the largest tiny allocation */
+	@Test
+	public void largestTinyTest() {
+		subpageTest(512-16-15, 512-16-15, 512-16);
+	}
+	
+	/** Allocate and free the smallest small allocation */
+	@Test
+	public void smallestSmallTest() {
+		subpageTest(512-15, 512-15, 512);
+	}
+	
+	/** Allocate and free the largest small allocation */
+	@Test
+	public void largestSmallTest() {
+		subpageTest(pageSize/2-1, pageSize/2-1, pageSize/2);
+	}
 		
-		int pageSize=8192; // default
-		
-		ByteBuf block;
 
-		// Allocate and free a single page
-		block = allocate(pageSize/2+1);
-	    assertMatch("Chunk.* 8192/");   // Verify a single page allocated.
-		block.release();
-		assertMatch("Chunk.* 0/");      // Verify the single page freed, and chunk still exists.
-		
-		// Allocate and free the tiniest tiny subpage
-		block = allocate(1);
-		assertMatch("1/.*elemSize: 16"); // Verify one element of size 16 has been allocated.
-		block.release();
-		assertMatch("0/.*elemSize: 16"); // Verify element has been freed, but page is still in pool.
-		
-		// Allocate and free the largest tiny subpage
-		block = allocate(512-16-15);
-		assertMatch("1/.*elemSize: 496");
-		block.release();
-		assertMatch("0/.*elemSize: 496");
-		
-		// Allocate and free smallest small subpage
-		block = allocate(512-15);
-		assertMatch("1/.*elemSize: 512");
-		block.release();
-		assertMatch("0/.*elemSize: 512");
-		
-		// Allocate and free largest small subpage
-		block = allocate(pageSize/2-1);
-		assertMatch("1/.*elemSize: 4096");
-		block.release();
-		assertMatch("0/.*elemSize: 4096");
+	/** Trim a large block to a smaller block. */
+    @Test
+    public void trimTest() {
 
 		// Allocate a large block and trim to a single page
-		block = allocate(25*pageSize, 256*pageSize);
+		TestAllocator allocator = new TestAllocator();
+		ByteBuf block = allocator.directBuffer(25*pageSize, 256*pageSize);
 		Assert.assertTrue(25*pageSize <= block.capacity() && block.capacity() <= 256*pageSize);
+		allocator.assertPages(256);
+		
 		block.capacity(pageSize/2+1);
 		Assert.assertTrue(block.capacity() == pageSize/2+1);
-		assertMatch("Chunk.* 40960/");
+		allocator.assertPages(1);
+    }
+    
+    
+    /** Trim a page down to a tiny buffer. */
+    @Test
+    public void trimTiny() {
+
+		// Allocate a single page
+		TestAllocator allocator = new TestAllocator();
+		ByteBuf block = allocator.directBuffer(pageSize, pageSize);
+		Assert.assertTrue(pageSize == block.capacity());
+		allocator.assertPages(1);
 		
 		// Trim the single page to a tiny size.
 		block.capacity(31);
-		assertMatch("1/.* elemSize: 32"); assertMatch("Chunk.* 40960/");
+		allocator.assertElement(1, 32).assertPages(1);
+    }
+    
+    
+    /** Grow a tiny buffer to a normal one */
+    @Test
+    public void tinyGrow() {
+
+		// Allocate a tiny buffer
+		TestAllocator allocator = new TestAllocator();
+		ByteBuf block = allocator.directBuffer(1, 1);
+		allocator.assertPages(1).assertElement(1, 16);
 		
 		// Resize the tiny block to two pages
 		block = block.capacity(pageSize+1);
 		Assert.assertTrue(block.capacity() == pageSize+1);
-		assertMatch("0/.* elemSize: 32"); assertMatch("Chunk.* 57344/");
+		allocator.assertPages(3).assertElement(0, 16);
+    }
+    
+    /** Grow a buffer by more than a page, causing exception */
+    @Test
+    public void growException() {
+
+		// Allocate two pages
+		TestAllocator allocator = new TestAllocator();
+		ByteBuf block = allocator.directBuffer(pageSize+1, pageSize+1);
 	
 		// Resize two pages to four pages. Should throw exception after copying more than one page.
 		try {
 		    block.capacity(4*pageSize);
 		    Assert.fail("ERROR: should have thrown exception\n");
 		} catch (TooMuchCopyingException e) {}
-		assertMatch("Chunk.* 73728/");
+		allocator.assertPages(4);
 		
-		// Drop the four pages. At this point, we have 5 pages consumed for subpage buffers.
+		// Drop the pages.
 		block.release();
-		assertMatch("Chunk.* 40960/");
-		
-		System.out.printf("All memory has been released:\n%s\n", toString());
+		allocator.assertPages(0);
 	}
 	
 	
-	
-	/** 
-	 * Verify our current state matches the pattern. 
-	 * 
-	 * Note: Uses the existing "toString()" method and extracts information
-	 *   by matching a pattern to one of the output lines.
-	 */
-    void assertMatch(String pattern) {
-		
-        // Get our current state as a string
-		String s = toString();
-	
-		// Do for each line in the string
-		for (int f=0, l=s.indexOf('\n',f); l != -1; f=l+1, l=s.indexOf('\n',f)) {
-			
-			// if the line contains pattern, then success.
-			if (s.substring(f,l).matches(".*"+pattern+".*")) return;
-		}
-		
-		// We didn't find a matching line, so fail the test
-		Assert.fail("Test failed to match pattern " + pattern);
-	}
 
-	
-	/** Display our thread's arena. The other arenas are not impacted by this test. */
-	public String toString() {
-		return allocator.threadCache.get().directArena.toString();
+    
+    
+    /** Test the allocation and free of a "normal" allocation */
+	private void normalTest(int min, int max, int pages) {
+		TestAllocator allocator = new TestAllocator();
+		
+		ByteBuf block = allocator.directBuffer(min, max);
+		Assert.assertTrue(block.capacity() >= min);
+		Assert.assertTrue(block.capacity() <= max);
+	    allocator.assertPages(pages);
+	    
+		block.release();
+		allocator.assertPages(0);
 	}
-
+		
 	
+	
+	/** Test the allocation and free of a "subpage" allocation */
+    private void subpageTest(int min, int max, int expected) {
+    	
+		TestAllocator allocator = new TestAllocator();
+		
+		// Allocate the buffer and verify we have the expected number of pages
+		ByteBuf block = allocator.directBuffer(min, max);
+		Assert.assertTrue(block.capacity() >= min);
+		Assert.assertTrue(block.capacity() <= max);
+	    allocator.assertPages(1).assertElement(1, expected);
+	    
+	    // Release the buffer. Verify the element is returned to pool and page still allocated.
+		block.release();
+		allocator.assertPages(1).assertElement(0, expected);
+	}
+    	
+    
+    
+    /** An allocator with some stuff added to aid testing */
+    class TestAllocator extends PooledByteBufAllocatorL {
+
+    	TestAllocator() {super(true);}
+    	
+    	public TestAllocator assertPages(int pages) {
+    		return assertMatch("Chunk.* "+pages*pageSize+"/");
+    	}
+
+    	public TestAllocator assertElement(int count, int size) {
+    		return assertMatch(count+"/.*elemSize: "+size);
+    	}
+
+    	/** 
+    	 * Verify our current state matches the pattern. 
+    	 * 
+    	 * Note: Uses the existing "toString()" method and extracts information
+    	 *   by matching a pattern to one of the output lines.
+    	 *
+    	 */
+    	TestAllocator assertMatch(String pattern) {
+
+    		// Get our current state as a string
+    		String s = toString();
+
+    		// Do for each line in the string
+    		for (int f=0, l=s.indexOf('\n',f); l != -1; f=l+1, l=s.indexOf('\n',f)) {
+
+    			// if the line contains pattern, then success.
+    			if (s.substring(f,l).matches(".*"+pattern+".*")) return this;
+    		}
+
+    		// We didn't find a matching line, so fail the test
+    		Assert.fail("Test failed to match pattern " + pattern);
+    		return this;
+    	}
+    }
+
 }

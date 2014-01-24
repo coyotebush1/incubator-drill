@@ -206,18 +206,22 @@ final class PoolChunkL<T> {
      *         bigger than the size to contain maxCapacity.
      *         
      * A node is the correct size to contain x bytes, if
-     *                size(node) == roundup-power-of-2(x)
-     *  equivalently, size(node) >= x  and   size(node.child) < x
-     *  equivalently, size(node) >= x  and   size(node)/2 < x    
+     *      runlength(node) == roundup-power-of-2(x)
+     *  equivalently, runlength(node) >= x  and   runlength(node.child) < x
+     *  equivalently, runlength(node) >= x  and   runlength(node)/2 < x  
+     *  
+     * Similarly, a node is the correct size to contain min...max bytes, if
+     *    runlength(node) >= roundup-power-of-2(min)  &&  runlength(node) <= roundup-power-of-2(max)
+     *    or equivalently,    runlength(node) >= min  &&  runlength(node)/2 < max   
      */
     long allocateRun(int minRequested, int maxRequested, int node, int runLength) {
     	
-    	// Descend through the subtrees until finding an unused node which is big enough
+    	// Search through the subtrees until finding an unused node s.t. runlength >= min
     	for (; runLength >= minRequested; runLength /= 2) {
     		if ((memoryMap[node]&3) != ST_BRANCH) break;
     		
             // Search one random subtree (recursively)
-    		int child = node*2 ^ nextRandom();
+    		int child = node*2 + nextRandom();
     		long handle = allocateRun(minRequested, maxRequested, child, runLength/2);
     		if (handle != -1) return handle;
     			
@@ -230,11 +234,11 @@ final class PoolChunkL<T> {
     		return -1;
     	}
     	
-    	// At this point, we have an unused node which is big enough.
+    	// At this point, we have an unused node s.t.  runlength >= min.
     	//   In other words, it is larger than the minimum, but it may also be larger
     	//   than the maximum. 
     	
-    	// Continue descending subtree looking for a node which doesn't exceed the maximum
+    	// Continue descending subtree looking for a node s.t. runlength/2 < max
         for (; runLength/2 >= maxRequested; runLength/=2) {
         	
         	// We are about to allocate from one of our children, so we become BRANCH
@@ -244,7 +248,7 @@ final class PoolChunkL<T> {
         	node = node * 2 + nextRandom();
         }
     	
-    	// We are finally at an unused node which isn't too small and isn't too large. Allocate it.
+    	// We are at an unused node which satisfies both conditions. Allocate it.
         memoryMap[node] = (memoryMap[node]&~3) | ST_ALLOCATED;
         freeBytes -= runLength;
         return node;
