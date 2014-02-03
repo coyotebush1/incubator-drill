@@ -37,9 +37,14 @@ public class TestPoolChunkTrim {
 		largestTinyTest();
 		smallestSmallTest();
 		largestSmallTest();
+		multiPageTest();
 		trimTest();
 		trimTiny();
+		trimZero();
 		tinyGrow();
+		zeroGrow();
+		zeroTest();
+		doubleZeroTest();
 		growException();
 	}
 
@@ -167,16 +172,17 @@ public class TestPoolChunkTrim {
     }
     
     /** Grow a zero buffer up */
-    //@Test - Fails
+    @Test
     public void zeroGrow() {
       TestAllocator allocator = new TestAllocator();
-      ByteBuf block = allocator.directBuffer(0, 0);
+      ByteBuf block = allocator.directBuffer(0);
       Assert.assertTrue(block.capacity() == 0);
+      allocator.assertPages(1).assertElement(0, 0);
       block.capacity(1);
       Assert.assertTrue(block.capacity() == 1);
-      allocator.assertPages(1);
+      allocator.assertPages(2).assertElement(1, 16).assertElement(0,  0);
       block.release();
-      allocator.assertPages(0);
+      allocator.assertPages(2).assertElement(0, 16).assertElement(0, 0);
     }
     
     /** Grow a tiny buffer to a normal one */

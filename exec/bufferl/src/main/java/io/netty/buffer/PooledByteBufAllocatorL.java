@@ -240,6 +240,17 @@ public class PooledByteBufAllocatorL extends AbstractByteBufAllocator {
     }
     
     
+    /**
+     * Override the abstract allocator again. When allocating a zero size buffer,
+     * the abstract allocator allocates an "emptyByteBuffer", which can never grow.
+     * Instead, fall through to the subpage allocator which always returns a directByteBuf
+     * of size zero which can grow.
+     */
+    public ByteBuf directBuffer(int minRequested, int maxRequested) {
+      return newDirectBuffer(minRequested, maxRequested);
+    }
+    
+    
     
     /**
      * Allocate a buffer from the current thread's direct arena.
