@@ -268,13 +268,12 @@ public class TestPoolChunkTrim {
 		ByteBuf block = allocator.directBuffer(min, max);
 		Assert.assertTrue(block.capacity() >= min);
 		Assert.assertTrue(block.capacity() <= max);
-	  if (min > 0)
-	    allocator.assertPages(1).assertElement(1, expected);
+	  if (min > 0)  allocator.assertPages(1).assertElement(1, expected);
+	  else          allocator.assertPages(1).assertElement(0,  expected);
 	    
 	    // Release the buffer. Verify the element is returned to pool and page still allocated.
 		block.release();
-		if (min > 0)
-		  allocator.assertPages(1).assertElement(0, expected);
+		allocator.assertPages(1).assertElement(0, expected);
 	}
     	
     
