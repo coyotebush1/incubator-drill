@@ -438,7 +438,7 @@ abstract class PoolArenaL<T> {
         buf.append(q100);
         buf.append(StringUtil.NEWLINE);
         buf.append("tiny subpages:");
-        for (int i = 1; i < tinySubpagePools.length; i ++) {
+        for (int i = 0; i < tinySubpagePools.length; i ++) {
             PoolSubpageL<T> head = tinySubpagePools[i];
             if (head.next == head) {
                 continue;

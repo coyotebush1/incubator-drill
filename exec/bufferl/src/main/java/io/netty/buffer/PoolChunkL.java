@@ -179,6 +179,10 @@ final class PoolChunkL<T> {
      * @return
      */
     long allocate(int minRequested, int maxRequested) {
+      
+      // CASE: invalid request. Throw exception.
+      if (maxRequested < minRequested || minRequested < 0)
+        throw new IllegalArgumentException("Allocate memory (invalid) min="+minRequested+" max="+maxRequested);
     	
     	// CASE: allocating runs of pages, make use of maxCapacity since we can trim it later
     	if (maxRequested > pageSize/2)   {

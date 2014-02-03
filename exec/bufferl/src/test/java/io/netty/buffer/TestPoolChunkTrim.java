@@ -94,6 +94,32 @@ public class TestPoolChunkTrim {
 	public void largestSmallTest() {
 		subpageTest(pageSize/2-1, pageSize/2-1, pageSize/2);
 	}
+	
+	/** Allocate and free a zero allocation */
+	@Test
+	public void zeroTest() {
+	  subpageTest(0, 0, 0);
+	}
+	
+	
+	@Test
+	public void doubleZeroTest() {
+    
+   TestAllocator allocator = new TestAllocator();
+   
+   // Allocate the buffer and verify we have the expected number of pages
+   //   We should allocate one page for size 16, and it allocates 
+   ByteBuf block1 = allocator.directBuffer(1); block1.capacity(0);
+   ByteBuf block2 = allocator.directBuffer(1); block2.capacity(0);
+  
+   // Note: we have one page of 16 and one page of 0, no elements in use.
+   allocator.assertPages(2).assertElement(0, 0).assertElement(0, 16);
+     
+     // Release the buffer. Verify the element is returned to pool and page still allocated.
+   block1.release();
+   block2.release();
+ }
+     
 		
 
 	/** Trim a large block to a smaller block. */
@@ -127,6 +153,31 @@ public class TestPoolChunkTrim {
 		allocator.assertElement(1, 32).assertPages(1);
     }
     
+    /** Trim a normal buffer down to zero */
+    @Test
+    public void trimZero() {
+      TestAllocator allocator = new TestAllocator();
+      ByteBuf block = allocator.directBuffer(10*pageSize, 10*pageSize);
+      Assert.assertTrue(block.capacity() == 10*pageSize);
+      block.capacity(0);
+      Assert.assertTrue(block.capacity() == 0);
+      allocator.assertPages(1).assertElement(0, 0);
+      block.release();
+      allocator.assertPages(1).assertElement(0, 0);
+    }
+    
+    /** Grow a zero buffer up */
+    //@Test - Fails
+    public void zeroGrow() {
+      TestAllocator allocator = new TestAllocator();
+      ByteBuf block = allocator.directBuffer(0, 0);
+      Assert.assertTrue(block.capacity() == 0);
+      block.capacity(1);
+      Assert.assertTrue(block.capacity() == 1);
+      allocator.assertPages(1);
+      block.release();
+      allocator.assertPages(0);
+    }
     
     /** Grow a tiny buffer to a normal one */
     @Test
@@ -164,7 +215,27 @@ public class TestPoolChunkTrim {
 	}
 	
 	
+    /**
+     * Test case where max < min
+     */
+    @Test
+    public void minMax() {
+      try {
+        normalTest(pageSize*2, pageSize, 2);
+        Assert.fail("ERROR: should have thrown exception");
+      } catch (IllegalArgumentException e) {}
+    }
 
+    /**
+     * Test case where min < 0
+     */
+    @Test
+    public void negative() {
+      try {
+        normalTest(-pageSize, pageSize, 1);
+        Assert.fail("ERROR: should have thrown exception");
+      } catch (IllegalArgumentException e) {}
+    }
     
     
     /** Test the allocation and free of a "normal" allocation */
@@ -191,11 +262,13 @@ public class TestPoolChunkTrim {
 		ByteBuf block = allocator.directBuffer(min, max);
 		Assert.assertTrue(block.capacity() >= min);
 		Assert.assertTrue(block.capacity() <= max);
+	  if (min > 0)
 	    allocator.assertPages(1).assertElement(1, expected);
 	    
 	    // Release the buffer. Verify the element is returned to pool and page still allocated.
 		block.release();
-		allocator.assertPages(1).assertElement(0, expected);
+		if (min > 0)
+		  allocator.assertPages(1).assertElement(0, expected);
 	}
     	
     
