@@ -35,7 +35,7 @@ import java.nio.channels.ScatteringByteChannel;
  * A buffer allocated from the netty pool allocator, optimized for little endian access.
  *
  */
-final class PooledUnsafeDirectByteBufL extends PooledByteBufL<ByteBuffer> {
+public final class PooledUnsafeDirectByteBufL extends PooledByteBufL<ByteBuffer> {
   
     private static final boolean NATIVE_ORDER = ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN;
 
