@@ -149,9 +149,9 @@ abstract class PooledByteBufL<T> extends AbstractReferenceCountedByteBuf {
         chunk.arena.reallocate(this, newCapacity, true);
         
         // Throw an exception if we copied more than a page of data.
-        int copyAmount = Math.min(originalLength,  length);
-        if (copyAmount > chunk.getPageSize())
-        	throw new TooMuchCopyingException("Reallocation: too much copying: " + copyAmount);
+        //int copyAmount = Math.min(originalLength,  length);
+        //if (copyAmount > chunk.getPageSize())
+        //	throw new TooMuchCopyingException("Reallocation: too much copying: " + copyAmount);
         
         return this;
     }
