@@ -24,10 +24,10 @@ import java.util.List;
 import org.apache.drill.common.logical.data.Scan;
 import org.apache.drill.exec.physical.base.AbstractGroupScan;
 
-public abstract class AbstractStorageEngine implements StoragePlugin{
-  static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(AbstractStorageEngine.class);
+public abstract class AbstractStoragePlugin implements StoragePlugin{
+  static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(AbstractStoragePlugin.class);
 
-  protected AbstractStorageEngine(){
+  protected AbstractStoragePlugin(){
   }
   
   @Override

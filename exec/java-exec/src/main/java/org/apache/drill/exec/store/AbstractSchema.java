@@ -46,6 +46,8 @@ public abstract class AbstractSchema implements Schema{
   public Set<String> getTableFunctionNames() {
     return Collections.emptySet();
   }
+  
+  
 
   @Override
   public Schema getSubSchema(String name) {
@@ -68,7 +70,9 @@ public abstract class AbstractSchema implements Schema{
   }
 
   @Override
-  public abstract DrillTable getTable(String name);
+  public DrillTable getTable(String name){
+    return null;
+  }
 
   @Override
   public Set<String> getTableNames() {

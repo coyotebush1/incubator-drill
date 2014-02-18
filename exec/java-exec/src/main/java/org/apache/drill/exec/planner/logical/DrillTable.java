@@ -22,7 +22,7 @@ import net.hydromatic.optiq.Statistic;
 import net.hydromatic.optiq.Statistics;
 import net.hydromatic.optiq.Table;
 
-import org.apache.drill.common.logical.StorageEngineConfig;
+import org.apache.drill.common.logical.StoragePluginConfig;
 import org.eigenbase.rel.RelNode;
 import org.eigenbase.relopt.RelOptTable;
 
@@ -30,18 +30,18 @@ import org.eigenbase.relopt.RelOptTable;
 public abstract class DrillTable implements Table{
   
   private final String storageEngineName;  
-  public final StorageEngineConfig storageEngineConfig;
+  public final StoragePluginConfig storageEngineConfig;
   private Object selection;
   
   
   /** Creates a DrillTable. */
-  public DrillTable(String storageEngineName, Object selection, StorageEngineConfig storageEngineConfig) {
+  public DrillTable(String storageEngineName, Object selection, StoragePluginConfig storageEngineConfig) {
     this.selection = selection;
     this.storageEngineConfig = storageEngineConfig;
     this.storageEngineName = storageEngineName;
   }
 
-  public StorageEngineConfig getStorageEngineConfig(){
+  public StoragePluginConfig getStorageEngineConfig(){
     return storageEngineConfig;
   }
   

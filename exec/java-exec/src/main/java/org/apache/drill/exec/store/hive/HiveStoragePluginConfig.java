@@ -15,29 +15,46 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.drill.exec.store.json;
+package org.apache.drill.exec.store.hive;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonTypeName;
-import org.apache.drill.common.logical.StorageEngineConfigBase;
+import org.apache.drill.common.logical.StoragePluginConfigBase;
+import org.apache.hadoop.hive.conf.HiveConf;
 
-@JsonTypeName("json")
-public class JSONStorageEngineConfig extends StorageEngineConfigBase {
-  private String dfsName;
+import java.util.Map;
 
-  public String getDfsName() {
-    return dfsName;
+@JsonTypeName("hive")
+public class HiveStoragePluginConfig extends StoragePluginConfigBase {
+  @JsonProperty
+  public Map<String, String> configProps;
+  @JsonIgnore
+  private HiveConf hiveConf;
+
+  @JsonIgnore
+  public HiveConf getHiveConf() {
+    if (hiveConf == null) {
+      hiveConf = new HiveConf();
+      if (configProps != null) {
+        for (Map.Entry<String, String> entry : configProps.entrySet()) {
+          hiveConf.set(entry.getKey(), entry.getValue());
+        }
+      }
+    }
+
+    return hiveConf;
   }
 
   @JsonCreator
-  public JSONStorageEngineConfig(@JsonProperty("dfsName") String dfsName) {
-    this.dfsName = dfsName;
+  public HiveStoragePluginConfig(@JsonProperty("config") Map<String, String> props) {
+    this.configProps = props;
   }
 
   @Override
   public int hashCode() {
-    return dfsName != null ? dfsName.hashCode() : 0;
+    return configProps != null ? configProps.hashCode() : 0;
   }
 
   @Override
@@ -45,9 +62,9 @@ public class JSONStorageEngineConfig extends StorageEngineConfigBase {
     if (this == o) return true;
     if (o == null || getClass() != o.getClass()) return false;
 
-    JSONStorageEngineConfig that = (JSONStorageEngineConfig) o;
+    HiveStoragePluginConfig that = (HiveStoragePluginConfig) o;
 
-    if (dfsName != null ? !dfsName.equals(that.dfsName) : that.dfsName != null) return false;
+    if (configProps != null ? !configProps.equals(that.configProps) : that.configProps != null) return false;
 
     return true;
   }

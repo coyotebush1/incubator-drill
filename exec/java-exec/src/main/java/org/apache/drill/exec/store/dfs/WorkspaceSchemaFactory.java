@@ -19,11 +19,8 @@ package org.apache.drill.exec.store.dfs;
 
 import java.io.IOException;
 import java.net.URISyntaxException;
-import java.util.Collections;
 import java.util.List;
 import java.util.Set;
-
-import net.hydromatic.optiq.Schema;
 
 import org.apache.drill.exec.planner.logical.DrillTable;
 import org.apache.drill.exec.planner.logical.DynamicDrillTable;
@@ -31,14 +28,17 @@ import org.apache.drill.exec.planner.sql.ExpandingConcurrentMap;
 import org.apache.drill.exec.store.AbstractSchema;
 import org.apache.drill.exec.store.SchemaHolder;
 import org.apache.drill.exec.store.dfs.shim.DrillFileSystem;
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
+
+import com.beust.jcommander.internal.Lists;
 
 public class WorkspaceSchemaFactory implements ExpandingConcurrentMap.MapValueFactory<String, DrillTable> {
   static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(WorkspaceSchemaFactory.class);
 
   private ExpandingConcurrentMap<String, DrillTable> tables = new ExpandingConcurrentMap<String, DrillTable>(this);
-  private final List<FormatMatcher> formatMatchers;
+  private final List<FormatMatcher> fileMatchers;
+  private final List<FormatMatcher> dirMatchers;
+  
   private final Path root;
   private final DrillFileSystem fs;
   private final String storageEngineName;
@@ -48,7 +48,14 @@ public class WorkspaceSchemaFactory implements ExpandingConcurrentMap.MapValueFa
       List<FormatMatcher> formatMatchers) throws IOException, URISyntaxException {
     this.fs = fileSystem;
     this.root = new Path(path);
-    this.formatMatchers = formatMatchers;
+    this.fileMatchers = Lists.newArrayList();
+    this.dirMatchers = Lists.newArrayList();
+    for(FormatMatcher m : formatMatchers){
+      if(m.supportDirectoryReads()){
+        dirMatchers.add(m);
+      }
+      fileMatchers.add(m);
+    }
     this.storageEngineName = storageEngineName;
     this.schemaName = schemaName;
   }
@@ -61,29 +68,21 @@ public class WorkspaceSchemaFactory implements ExpandingConcurrentMap.MapValueFa
   public DrillTable create(String key) {
     try {
       FileSelection fileSelection = FileSelection.create(fs, root, key);
-      if (fileSelection == null)
-        return null;
-
-      if (fileSelection.isDir()) {
-        for (FormatMatcher m : formatMatchers) {
-          if (m.isDirReadable(fileSelection.getStatus())) {
-            return new DynamicDrillTable(storageEngineName, Collections.singletonList(fileSelection.getStatus()), m
-                .getFormatPlugin().getConfig());
-          }
-          ;
+      
+      if(fileSelection.containsDirectories(fs)){
+        for(FormatMatcher m : dirMatchers){
+          Object selection = m.isReadable(fileSelection);
+          if(selection != null) return new DynamicDrillTable(storageEngineName, selection, m.getFormatPlugin().getStorageConfig());
         }
+        fileSelection = fileSelection.minusDirectorries(fs);
       }
-
-      List<FileStatus> files = fileSelection.getFileList();
-      if (files.isEmpty())
-        return null;
-
-      FileStatus first = files.iterator().next();
-      for (FormatMatcher m : formatMatchers) {
-        if (m.isFileReadable(first)) {
-          return new DynamicDrillTable(storageEngineName, files, m.getFormatPlugin().getConfig());
-        }
+      
+      for(FormatMatcher m : dirMatchers){
+        Object selection = m.isReadable(fileSelection);
+        if(selection != null) return new DynamicDrillTable(storageEngineName, selection, m.getFormatPlugin().getStorageConfig());
       }
+      return null;
+
     } catch (IOException e) {
       logger.debug("Failed to create DrillTable with root {} and name {}", root, key, e);
     }

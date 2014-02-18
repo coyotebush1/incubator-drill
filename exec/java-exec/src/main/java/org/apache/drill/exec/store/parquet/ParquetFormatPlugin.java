@@ -18,21 +18,28 @@
 package org.apache.drill.exec.store.parquet;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 import java.util.regex.Pattern;
 
 import org.apache.drill.common.expression.FieldReference;
+import org.apache.drill.common.logical.StoragePluginConfig;
+import org.apache.drill.exec.physical.base.AbstractGroupScan;
 import org.apache.drill.exec.server.DrillbitContext;
+import org.apache.drill.exec.store.QueryOptimizerRule;
 import org.apache.drill.exec.store.dfs.BasicFormatMatcher;
+import org.apache.drill.exec.store.dfs.FileSelection;
 import org.apache.drill.exec.store.dfs.FileSystemFormatConfig;
 import org.apache.drill.exec.store.dfs.FormatMatcher;
 import org.apache.drill.exec.store.dfs.FormatPlugin;
+import org.apache.drill.exec.store.dfs.FormatSelection;
 import org.apache.drill.exec.store.dfs.MagicString;
-import org.apache.drill.exec.store.dfs.ReadHandle;
+import org.apache.drill.exec.store.dfs.shim.DrillFileSystem;
 import org.apache.drill.exec.store.mock.MockStorageEngine;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 
 import parquet.format.converter.ParquetMetadataConverter;
 import parquet.hadoop.CodecFactoryExposer;
@@ -46,27 +53,30 @@ public class ParquetFormatPlugin implements FormatPlugin{
   private final DrillbitContext context;
   static final ParquetMetadataConverter parquetMetadataConverter = new ParquetMetadataConverter();
   private CodecFactoryExposer codecFactoryExposer;
-  private final FileSystem fs;
+  private final DrillFileSystem fs;
   private final ParquetFormatMatcher formatMatcher;
-  private FileSystemFormatConfig<ParquetFormatConfig> config;
+  private final ParquetFormatConfig config;
+  private final StoragePluginConfig storageConfig;
   
-  public ParquetFormatPlugin(FileSystem fs, FileSystemFormatConfig<ParquetFormatConfig> configuration, DrillbitContext context){
+  public ParquetFormatPlugin(StoragePluginConfig storageConfig, DrillFileSystem fs, ParquetFormatConfig formatConfig, DrillbitContext context){
     this.context = context;
-    this.codecFactoryExposer = new CodecFactoryExposer(fs.getConf());
-    this.config = configuration;
-    this.formatMatcher = new ParquetFormatMatcher(fs);
+    this.codecFactoryExposer = new CodecFactoryExposer(fs.getUnderlying().getConf());
+    this.config = formatConfig;
+    this.formatMatcher = new ParquetFormatMatcher(this, fs);
+    this.storageConfig = storageConfig;
     this.fs = fs;
   }
 
   Configuration getHadoopConfig() {
-    return fs.getConf();
+    return fs.getUnderlying().getConf();
   }
 
-  FileSystem getFileSystem() {
+  public DrillFileSystem getFileSystem() {
     return fs;
   }
 
-  public FileSystemFormatConfig<ParquetFormatConfig> getFormatConfig() {
+  @Override
+  public ParquetFormatConfig getConfig() {
     return config;
   }
 
@@ -80,8 +90,18 @@ public class ParquetFormatPlugin implements FormatPlugin{
   }
   
   @Override
-  public ParquetGroupScan getGroupScan(FileSystem fs, FieldReference outputRef, List<FileStatus> data) throws IOException {
-    return new ParquetGroupScan( data, this, outputRef);
+  public List<QueryOptimizerRule> getOptimizerRules() {
+    return Collections.emptyList();
+  }
+
+  @Override
+  public ParquetGroupScan getGroupScan(FieldReference outputRef, FileSelection selection) throws IOException {
+    return new ParquetGroupScan( selection.getFileStatusList(fs), this, outputRef);
+  }
+
+  @Override
+  public StoragePluginConfig getStorageConfig() {
+    return storageConfig;
   }
 
   public CodecFactoryExposer getCodecFactoryExposer() {
@@ -95,16 +115,15 @@ public class ParquetFormatPlugin implements FormatPlugin{
 
   @Override
   public FormatMatcher getMatcher() {
-    return null;
+    return formatMatcher;
   }
-  
-  
 
-  
   private static class ParquetFormatMatcher extends BasicFormatMatcher{
-
-    public ParquetFormatMatcher(FileSystem fs) {
-      super(fs, //
+    
+    private final DrillFileSystem fs;
+    
+    public ParquetFormatMatcher(ParquetFormatPlugin plugin, DrillFileSystem fs) {
+      super(plugin, fs, //
           Lists.newArrayList( //
               Pattern.compile(".*\\.parquet$"), //
               Pattern.compile(".*/" + ParquetFileWriter.PARQUET_METADATA_FILE) //
@@ -113,13 +132,34 @@ public class ParquetFormatPlugin implements FormatPlugin{
           Lists.newArrayList(new MagicString(0, ParquetFileWriter.MAGIC))
                     
           );
+      this.fs = fs;
       
+    }
+    
+    @Override
+    public boolean supportDirectoryReads() {
+      return true;
     }
 
     @Override
-    public ReadHandle isDirReadable(FileStatus dir) {
-      
-      return super.isDirReadable(dir);
+    public FormatSelection isReadable(FileSelection file) throws IOException {
+      // TODO: we only check the first file for directory reading.  This is because 
+      if(file.containsDirectories(fs)){
+        if(isDirReadable(file.getFirstPath(fs))){
+          return new FormatSelection(plugin.getConfig(), file);
+        }
+      }
+      return super.isReadable(file);
+    }
+    
+    boolean isDirReadable(FileStatus dir) {
+      Path p = new Path(dir.getPath(), "/" + ParquetFileWriter.PARQUET_METADATA_FILE);
+      try {
+        return fs.getUnderlying().exists(p);
+      } catch (IOException e) {
+        logger.info("Failure while attempting to check for Parquet metadata file.", e);
+        return false;
+      }
     }
     
     

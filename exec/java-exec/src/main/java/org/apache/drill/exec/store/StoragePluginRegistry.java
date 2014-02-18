@@ -32,18 +32,21 @@ import net.hydromatic.optiq.SchemaPlus;
 
 import org.apache.drill.common.config.DrillConfig;
 import org.apache.drill.common.exceptions.ExecutionSetupException;
-import org.apache.drill.common.logical.StorageEngineConfig;
+import org.apache.drill.common.logical.StoragePluginConfig;
 import org.apache.drill.common.util.PathScanner;
 import org.apache.drill.exec.ExecConstants;
 import org.apache.drill.exec.planner.logical.StorageEngines;
 import org.apache.drill.exec.server.DrillbitContext;
+import org.apache.drill.exec.store.dfs.FileSystemPlugin;
+import org.apache.drill.exec.store.dfs.FormatPlugin;
+import org.apache.drill.exec.store.dfs.FormatPluginConfig;
 
 import com.google.common.base.Charsets;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.io.Resources;
 
-public class StorageEngineRegistry implements Iterable<Map.Entry<String, StoragePlugin>>{
-  static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(StorageEngineRegistry.class);
+public class StoragePluginRegistry implements Iterable<Map.Entry<String, StoragePlugin>>{
+  static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(StoragePluginRegistry.class);
 
   private Map<Object, Constructor<? extends StoragePlugin>> availableEngines = new HashMap<Object, Constructor<? extends StoragePlugin>>();
   private final ImmutableMap<String, StoragePlugin> engines;
@@ -51,7 +54,7 @@ public class StorageEngineRegistry implements Iterable<Map.Entry<String, Storage
   private DrillbitContext context;
   private final DrillSchemaFactory schemaFactory = new DrillSchemaFactory();
   
-  public StorageEngineRegistry(DrillbitContext context) {
+  public StoragePluginRegistry(DrillbitContext context) {
     this.context = context;
     init(context.getConfig());
     this.engines = ImmutableMap.copyOf(createEngines());
@@ -65,8 +68,8 @@ public class StorageEngineRegistry implements Iterable<Map.Entry<String, Storage
       int i =0;
       for(Constructor<?> c : engine.getConstructors()){
         Class<?>[] params = c.getParameterTypes();
-        if(params.length != 2 || params[1] != DrillbitContext.class || !StorageEngineConfig.class.isAssignableFrom(params[0])){
-          logger.info("Skipping StorageEngine constructor {} for engine class {} since it doesn't implement a [constructor(StorageEngineConfig, DrillbitContext)]", c, engine);
+        if(params.length != 3 || params[1] != DrillbitContext.class || !StoragePluginConfig.class.isAssignableFrom(params[0]) || params[2] != String.class){
+          logger.info("Skipping StorageEngine constructor {} for engine class {} since it doesn't implement a [constructor(StorageEngineConfig, DrillbitContext, String)]", c, engine);
           continue;
         }
         availableEngines.put(params[0], (Constructor<? extends StoragePlugin>) c);
@@ -89,9 +92,9 @@ public class StorageEngineRegistry implements Iterable<Map.Entry<String, Storage
       throw new IllegalStateException("Failure while reading storage engines data.", e);
     }
     
-    for(Map.Entry<String, StorageEngineConfig> config : engines){
+    for(Map.Entry<String, StoragePluginConfig> config : engines){
       try{
-        StoragePlugin plugin = create(config.getValue());
+        StoragePlugin plugin = create(config.getKey(), config.getValue());
         activeEngines.put(config.getKey(), plugin);
       }catch(ExecutionSetupException e){
         logger.error("Failure while setting up StoragePlugin with name: '{}'.", config.getKey(), e);
@@ -100,18 +103,34 @@ public class StorageEngineRegistry implements Iterable<Map.Entry<String, Storage
     return activeEngines;
   }
 
-  public StoragePlugin getEngine(String name) throws ExecutionSetupException {
-    return engines.get(name);
+  public StoragePlugin getEngine(String registeredStorageEngineName) throws ExecutionSetupException {
+    return engines.get(registeredStorageEngineName);
+  }
+  
+  public StoragePlugin getEngine(StoragePluginConfig config) throws ExecutionSetupException {
+    if(config instanceof NamedStoragePluginConfig){
+      return engines.get(((NamedStoragePluginConfig) config).name);
+    }else{
+      // TODO: for now, we'll throw away transient configs.  we really ought to clean these up.
+      return create(null, config);
+    }
+  }
+  
+  public FormatPlugin getFormatPlugin(StoragePluginConfig storageConfig, FormatPluginConfig formatConfig) throws ExecutionSetupException{
+    StoragePlugin p = getEngine(storageConfig);
+    if(!(p instanceof FileSystemPlugin)) throw new ExecutionSetupException(String.format("You tried to request a format plugin for a stroage engine that wasn't of type FileSystemPlugin.  The actual type of plugin was %s.", p.getClass().getName()));
+    FileSystemPlugin storage = (FileSystemPlugin) p;
+    return storage.getFormatPlugin(formatConfig);
   }
 
-  private StoragePlugin create(StorageEngineConfig engineConfig) throws ExecutionSetupException {
+  private StoragePlugin create(String name, StoragePluginConfig engineConfig) throws ExecutionSetupException {
     StoragePlugin engine = null;
     Constructor<? extends StoragePlugin> c = availableEngines.get(engineConfig.getClass());
     if (c == null)
       throw new ExecutionSetupException(String.format("Failure finding StorageEngine constructor for config %s",
           engineConfig));
     try {
-      engine = c.newInstance(engineConfig, context);
+      engine = c.newInstance(engineConfig, context, name);
       return engine;
     } catch (InstantiationException | IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
       Throwable t = e instanceof InvocationTargetException ? ((InvocationTargetException) e).getTargetException() : e;
@@ -136,7 +155,7 @@ public class StorageEngineRegistry implements Iterable<Map.Entry<String, Storage
     @Override
     public Schema apply(SchemaPlus parent) {
       for(Map.Entry<String, StoragePlugin> e : engines.entrySet()){
-        e.getValue().createAndAddSchema(parent, e.getKey());
+        e.getValue().createAndAddSchema(parent);
       }
       return null;
     }

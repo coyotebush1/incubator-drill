@@ -23,8 +23,10 @@ import java.util.concurrent.TimeUnit;
 
 import org.apache.drill.common.config.DrillConfig;
 import org.apache.drill.common.exceptions.ExecutionSetupException;
+import org.apache.drill.common.exceptions.PhysicalOperatorSetupException;
 import org.apache.drill.common.expression.FieldReference;
 import org.apache.drill.common.expression.SchemaPath;
+import org.apache.drill.common.logical.StoragePluginConfig;
 import org.apache.drill.exec.metrics.DrillMetrics;
 import org.apache.drill.exec.physical.EndpointAffinity;
 import org.apache.drill.exec.physical.OperatorCost;
@@ -32,8 +34,9 @@ import org.apache.drill.exec.physical.base.AbstractGroupScan;
 import org.apache.drill.exec.physical.base.PhysicalOperator;
 import org.apache.drill.exec.physical.base.Size;
 import org.apache.drill.exec.proto.CoordinationProtos.DrillbitEndpoint;
-import org.apache.drill.exec.store.StorageEngineRegistry;
-import org.apache.drill.exec.store.dfs.FileSelection;
+import org.apache.drill.exec.store.StoragePluginRegistry;
+import org.apache.drill.exec.store.dfs.FileSystemPlugin;
+import org.apache.drill.exec.store.dfs.FormatPluginConfig;
 import org.apache.drill.exec.store.dfs.ReadEntryFromHDFS;
 import org.apache.drill.exec.store.dfs.ReadEntryWithPath;
 import org.apache.drill.exec.store.dfs.easy.FileWork;
@@ -77,11 +80,11 @@ public class ParquetGroupScan extends AbstractGroupScan {
 
   private ListMultimap<Integer, RowGroupInfo> mappings;
   private List<RowGroupInfo> rowGroupInfos;
-  private List<ReadEntryWithPath> entries;
-  private Stopwatch watch = new Stopwatch();
-  private ParquetFormatPlugin storageEngine;
-  private ParquetFormatConfig engineConfig;
-  private FileSystem fs;
+  private final List<ReadEntryWithPath> entries;
+  private final Stopwatch watch = new Stopwatch();
+  private final ParquetFormatPlugin formatPlugin;
+  private final ParquetFormatConfig formatConfig;
+  private final FileSystem fs;
   private final FieldReference ref;
   private List<EndpointAffinity> endpointAffinities;
 
@@ -93,19 +96,24 @@ public class ParquetGroupScan extends AbstractGroupScan {
 
   @JsonProperty("storageengine")
   public ParquetFormatConfig getEngineConfig() {
-    return this.engineConfig;
+    return this.formatConfig;
   }
 
   @JsonCreator
-  public ParquetGroupScan(@JsonProperty("entries") List<ReadEntryWithPath> entries,
-      @JsonProperty("storageengine") ParquetFormatConfig storageEngineConfig,
-      @JacksonInject StorageEngineRegistry engineRegistry, @JsonProperty("ref") FieldReference ref,
-      @JsonProperty("columns") List<SchemaPath> columns) throws IOException, ExecutionSetupException {
+  public ParquetGroupScan( //
+      @JsonProperty("entries") List<ReadEntryWithPath> entries, //
+      @JsonProperty("storage") StoragePluginConfig storageConfig, //
+      @JsonProperty("format") FormatPluginConfig formatConfig, //
+      @JacksonInject StoragePluginRegistry engineRegistry, // 
+      @JsonProperty("ref") FieldReference ref, //
+      @JsonProperty("columns") List<SchemaPath> columns //
+      ) throws IOException, ExecutionSetupException {
     engineRegistry.init(DrillConfig.create());
     this.columns = columns;
-    this.storageEngine = (ParquetFormatPlugin) engineRegistry.getEngine(storageEngineConfig);
-    this.fs = storageEngine.getFileSystem();
-    this.engineConfig = storageEngineConfig;
+    FileSystemPlugin plugin = (FileSystemPlugin) engineRegistry.getEngine(storageConfig);
+    this.formatPlugin = (ParquetFormatPlugin) plugin.getFormatPlugin(formatConfig);
+    this.fs = formatPlugin.getFileSystem().getUnderlying();
+    this.formatConfig = formatPlugin.getConfig();
     this.entries = entries;
     this.ref = ref;
     this.readFooterFromEntries();
@@ -113,13 +121,13 @@ public class ParquetGroupScan extends AbstractGroupScan {
   }
 
   public ParquetGroupScan(List<FileStatus> files, //
-      ParquetFormatPlugin storageEngine, //
+      ParquetFormatPlugin formatPlugin, //
       FieldReference ref) //
       throws IOException {
-    this.storageEngine = storageEngine;
+    this.formatPlugin = formatPlugin;
     this.columns = null;
-    this.engineConfig = storageEngine.getFormatConfig();
-    this.fs = storageEngine.getFileSystem();
+    this.formatConfig = formatPlugin.getConfig();
+    this.fs = formatPlugin.getFileSystem().getUnderlying();
     
     this.entries = Lists.newArrayList();
     for(FileStatus file : files){
@@ -148,7 +156,7 @@ public class ParquetGroupScan extends AbstractGroupScan {
     long start = 0, length = 0;
     ColumnChunkMetaData columnChunkMetaData;
     for (FileStatus status : statuses) {
-      List<Footer> footers = ParquetFileReader.readFooters(this.storageEngine.getHadoopConfig(), status);
+      List<Footer> footers = ParquetFileReader.readFooters(formatPlugin.getHadoopConfig(), status);
       if (footers.size() == 0) {
         throw new IOException(String.format("Unable to find footer for file %s", status.getPath().getName()));
       }
@@ -239,19 +247,19 @@ public class ParquetGroupScan extends AbstractGroupScan {
     return this.endpointAffinities;
   }
 
-  /**
-   * 
-   * @param incomingEndpoints
-   */
   @Override
-  public void applyAssignments(List<DrillbitEndpoint> incomingEndpoints) {
+  public void applyAssignments(List<DrillbitEndpoint> incomingEndpoints) throws PhysicalOperatorSetupException {
     BlockMapBuilder bmb = new BlockMapBuilder(fs, incomingEndpoints);
-
+    try{
     for (RowGroupInfo rgi : rowGroupInfos) {
       EndpointByteMap ebm = bmb.getEndpointByteMap(rgi);
       rgi.setEndpointByteMap(ebm);
     }
-
+    } catch (IOException e) {
+      throw new PhysicalOperatorSetupException("Failure whiel generating endpoint byte map.", e);
+    }finally{
+      
+    }
     this.mappings = AssignmentCreator.getMappings(incomingEndpoints, rowGroupInfos);
 
   }
@@ -267,7 +275,7 @@ public class ParquetGroupScan extends AbstractGroupScan {
     Preconditions.checkArgument(!rowGroupsForMinor.isEmpty(),
         String.format("MinorFragmentId %d has no read entries assigned", minorFragmentId));
 
-    return new ParquetRowGroupScan(storageEngine, engineConfig, convertToReadEntries(rowGroupsForMinor), ref, columns);
+    return new ParquetRowGroupScan(formatPlugin, convertToReadEntries(rowGroupsForMinor), ref, columns);
   }
 
   

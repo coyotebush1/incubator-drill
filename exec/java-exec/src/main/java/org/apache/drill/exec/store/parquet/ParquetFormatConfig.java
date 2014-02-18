@@ -17,51 +17,10 @@
  */
 package org.apache.drill.exec.store.parquet;
 
-import java.util.HashMap;
+import org.apache.drill.exec.store.dfs.FormatPluginConfig;
 
-import org.apache.drill.exec.store.dfs.FormatConfig;
-
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonTypeName;
 
 @JsonTypeName("parquet")
-public class ParquetFormatConfig implements FormatConfig{
-
-  public String getDfsName() {
-    return dfsName;
-  }
-
-  // information needed to identify an HDFS instance
-  private String dfsName;
-  private HashMap<String,String> map;
-
-  @JsonCreator
-  public ParquetFormatConfig(@JsonProperty("dfsName") String dfsName) {
-    this.dfsName = dfsName;
-  }
-
-  @Override
-  public boolean equals(Object o) {
-    if (this == o) return true;
-    if (o == null || getClass() != o.getClass()) return false;
-
-    ParquetFormatConfig that = (ParquetFormatConfig) o;
-
-    if (dfsName != null ? !dfsName.equals(that.dfsName) : that.dfsName != null) return false;
-
-    return true;
-  }
-
-  @Override
-  public int hashCode() {
-    return dfsName != null ? dfsName.hashCode() : 0;
-  }
-  public void set(String key, String value) {
-    map.put(key, value);
-  }
-
-  public String get(String key) {
-    return map.get(key);
-  }
+public class ParquetFormatConfig implements FormatPluginConfig{
 }

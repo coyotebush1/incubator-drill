@@ -44,10 +44,13 @@ public class FallbackFileSystem extends DrillFileSystem {
     }
   }
 
+  
   private void addRecursiveStatus(FileStatus parent, List<FileStatus> listToFill) throws IOException {
     if (parent.isDir()) {
-      for (FileStatus s : fs.listStatus(parent.getPath())) {
-        addRecursiveStatus(s, listToFill);
+      Path pattern = new Path(parent.getPath(), "/*");
+      FileStatus[] sub = fs.globStatus(pattern);
+      for(FileStatus s : sub){
+        listToFill.add(s);
       }
     } else {
       listToFill.add(parent);
@@ -120,5 +123,7 @@ public class FallbackFileSystem extends DrillFileSystem {
     }
 
   }
+
+
 
 }

@@ -21,7 +21,9 @@ package org.apache.drill.exec.store.schedule;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.drill.exec.metrics.DrillMetrics;
@@ -32,6 +34,7 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 
+import com.beust.jcommander.internal.Lists;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
 import com.google.common.base.Stopwatch;
@@ -54,17 +57,63 @@ public class BlockMapBuilder {
     buildEndpointMap();
   }
 
+  
+  public List<CompleteFileWork> generateFileWork(List<FileStatus> files, boolean blockify) throws IOException{
+    List<CompleteFileWork> work = Lists.newArrayList();
+    for(FileStatus f : files){
+      ImmutableRangeMap<Long,BlockLocation> rangeMap = getBlockMap(f);
+      if(!blockify){
+        work.add(new CompleteFileWork(this.getEndpointByteMap(new FileStatusWork(f)), 0, f.getLen(), f.getPath().toString()));
+        continue;
+      }
+      
+      for(Entry<Range<Long>, BlockLocation> l : rangeMap.asMapOfRanges().entrySet()){
+        work.add(new CompleteFileWork(this.getEndpointByteMap(new FileStatusWork(f)), l.getValue().getOffset(), l.getValue().getLength(), f.getPath().toString()));
+      }
+    }
+    return work;
+  }
+  
+  private class FileStatusWork implements FileWork{
+    private FileStatus status;
+
+    public FileStatusWork(FileStatus status) {
+      if(status.isDir()) throw new IllegalStateException("FileStatus work only works with files, not directories.");
+      this.status = status;
+    }
+
+    @Override
+    public String getPath() {
+      return status.getPath().toString();
+    }
+
+    @Override
+    public long getStart() {
+      return 0;
+    }
+
+    @Override
+    public long getLength() {
+      return status.getLen();
+    }
+    
+    
+    
+  }
+  
+  private ImmutableRangeMap<Long,BlockLocation> buildBlockMap(Path path) throws IOException {
+    FileStatus status = fs.getFileStatus(path);
+    return buildBlockMap(status);
+  }
+  
   /**
    * Builds a mapping of block locations to file byte range
    */
-  private void buildBlockMap(Path path) {
+  private ImmutableRangeMap<Long,BlockLocation> buildBlockMap(FileStatus status) throws IOException {
     final Timer.Context context = metrics.timer(BLOCK_MAP_BUILDER_TIMER).time();
     BlockLocation[] blocks;
     ImmutableRangeMap<Long,BlockLocation> blockMap;
-    try {
-      FileStatus file = fs.getFileStatus(path);
-      blocks = fs.getFileBlockLocations(file, 0 , file.getLen());
-    } catch (IOException ioe) { throw new RuntimeException(ioe); }
+    blocks = fs.getFileBlockLocations(status, 0 , status.getLen());
     ImmutableRangeMap.Builder<Long, BlockLocation> blockMapBuilder = new ImmutableRangeMap.Builder<Long,BlockLocation>();
     for (BlockLocation block : blocks) {
       long start = block.getOffset();
@@ -73,25 +122,41 @@ public class BlockMapBuilder {
       blockMapBuilder = blockMapBuilder.put(range, block);
     }
     blockMap = blockMapBuilder.build();
-    blockMapMap.put(path, blockMap);
+    blockMapMap.put(status.getPath(), blockMap);
     context.stop();
+    return blockMap;
   }
+  
+  private ImmutableRangeMap<Long,BlockLocation> getBlockMap(Path path) throws IOException{
+    ImmutableRangeMap<Long,BlockLocation> blockMap  = blockMapMap.get(path);
+    if(blockMap == null){
+      blockMap = buildBlockMap(path);
+    }
+    return blockMap;
+  }
+  
+  private ImmutableRangeMap<Long,BlockLocation> getBlockMap(FileStatus status) throws IOException{
+    ImmutableRangeMap<Long,BlockLocation> blockMap  = blockMapMap.get(status.getPath());
+    if(blockMap == null){
+      blockMap = buildBlockMap(status);
+    }
+    return blockMap;
+  }
+
   
   /**
    * For a given FileWork, calculate how many bytes are available on each on drillbit endpoint
    *
    * @param work the FileWork to calculate endpoint bytes for
+   * @throws IOException 
    */
-  public EndpointByteMap getEndpointByteMap(FileWork work) {
+  public EndpointByteMap getEndpointByteMap(FileWork work) throws IOException {
     Stopwatch watch = new Stopwatch();
     watch.start();
     Path fileName = new Path(work.getPath());
     
-    if (!blockMapMap.containsKey(fileName)) {
-      buildBlockMap(fileName);
-    }
-
-    ImmutableRangeMap<Long,BlockLocation> blockMap = blockMapMap.get(fileName);
+    
+    ImmutableRangeMap<Long,BlockLocation> blockMap = getBlockMap(fileName);
     EndpointByteMapImpl endpointByteMap = new EndpointByteMapImpl();
     long start = work.getStart();
     long end = start + work.getLength();

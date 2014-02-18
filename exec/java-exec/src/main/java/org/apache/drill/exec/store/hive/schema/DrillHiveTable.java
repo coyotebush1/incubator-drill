@@ -3,26 +3,27 @@ package org.apache.drill.exec.store.hive.schema;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 
-import org.apache.drill.common.logical.StorageEngineConfig;
+import org.apache.drill.common.logical.StoragePluginConfig;
 import org.apache.drill.exec.planner.logical.DrillTable;
-import org.eigenbase.reltype.RelDataType;
-import org.eigenbase.reltype.RelDataTypeFactory;
-import org.eigenbase.sql.SqlCollation;
-import org.eigenbase.sql.type.SqlTypeName;
+import org.apache.drill.exec.store.hive.HiveReadEntry;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.hadoop.hive.ql.metadata.Table;
 import org.apache.hadoop.hive.serde2.objectinspector.ObjectInspector;
 import org.apache.hadoop.hive.serde2.objectinspector.PrimitiveObjectInspector;
 import org.apache.hadoop.hive.serde2.objectinspector.StructField;
+import org.eigenbase.reltype.RelDataType;
+import org.eigenbase.reltype.RelDataTypeFactory;
+import org.eigenbase.sql.SqlCollation;
+import org.eigenbase.sql.type.SqlTypeName;
 
 public class DrillHiveTable extends DrillTable{
   static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(DrillHiveTable.class);
   
   private final Table hiveTable;
   
-  public DrillHiveTable(String name, String storageEngineName, Object selection, StorageEngineConfig storageEngineConfig, Table hiveTable) {
-    super(name, storageEngineName, selection, storageEngineConfig);
-    this.hiveTable = hiveTable;
+  public DrillHiveTable(String storageEngineName, HiveReadEntry readEntry, StoragePluginConfig storageEngineConfig) {
+    super(storageEngineName, readEntry, storageEngineConfig);
+    this.hiveTable = new org.apache.hadoop.hive.ql.metadata.Table(readEntry.getTable());
   }
 
   @Override

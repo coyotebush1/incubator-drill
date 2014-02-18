@@ -24,7 +24,7 @@ import java.util.Map;
 
 import org.apache.drill.common.types.TypeProtos;
 import org.apache.drill.exec.store.ByteArrayUtil;
-import org.apache.drill.exec.store.json.JsonSchemaProvider;
+import org.apache.drill.exec.store.easy.json.JsonSchemaProvider;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;

@@ -2,12 +2,13 @@ package org.apache.drill.exec.store.dfs;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.regex.Pattern;
 
+import org.apache.drill.exec.store.dfs.shim.DrillFileSystem;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
 
 import com.beust.jcommander.internal.Lists;
 import com.google.common.collect.ImmutableList;
@@ -18,34 +19,54 @@ public class BasicFormatMatcher extends FormatMatcher{
 
   private final List<Pattern> patterns;
   private final MagicStringMatcher matcher;
-  private final FileSystem fs;
+  protected final DrillFileSystem fs;
+  protected final FormatPlugin plugin;
   
-  public BasicFormatMatcher(FileSystem fs, List<Pattern> patterns, List<MagicString> magicStrings) {
+  public BasicFormatMatcher(FormatPlugin plugin, DrillFileSystem fs, List<Pattern> patterns, List<MagicString> magicStrings) {
     super();
     this.patterns = ImmutableList.copyOf(patterns);
     this.matcher = new MagicStringMatcher(magicStrings);
     this.fs = fs;
+    this.plugin = plugin;
+  }
+  
+  public BasicFormatMatcher(FormatPlugin plugin, DrillFileSystem fs, String extension){
+    this(plugin, fs, //
+        Lists.newArrayList(Pattern.compile(".*/\\.")), //
+        (List<MagicString>) Collections.EMPTY_LIST);
+  }
+  
+  @Override
+  public boolean supportDirectoryReads() {
+    return false;
   }
 
   @Override
-  public ReadHandle isDirReadable(FileStatus dir) {
+  public FormatSelection isReadable(FileSelection file) throws IOException {
+    if(isReadable(file.getFirstPath(fs))){
+      return new FormatSelection(plugin.getConfig(), file);
+    }
     return null;
   }
 
-  @Override
-  public ReadHandle isFileReadable(FileStatus file) throws IOException {
-    String path = file.getPath().toString();
+  protected final boolean isReadable(FileStatus status) throws IOException {
     for(Pattern p : patterns){
-      if(p.matcher(path).matches()){
-        return new FileReadHandle(file);
+      if(p.matcher(status.getPath().toString()).matches()){
+        return true;
       }
     }
     
-    if(matcher.matches(file)) return new FileReadHandle(file);
-    
-    return null;
+    if(matcher.matches(status)) return true;
+    return false;
   }
   
+  
+  @Override
+  public FormatPlugin getFormatPlugin() {
+    return plugin;
+  }
+
+
   private class MagicStringMatcher{
     
     private List<RangeMagics> ranges;
@@ -61,7 +82,7 @@ public class BasicFormatMatcher extends FormatMatcher{
       if(ranges.isEmpty()) return false;
       final Range<Long> fileRange = Range.closedOpen( 0L, status.getLen());
       
-      try(FSDataInputStream is = fs.open(status.getPath())){
+      try(FSDataInputStream is = fs.open(status.getPath()).getInputStream()){
         for(RangeMagics rMagic : ranges){
           Range<Long> r = rMagic.range;
           if(!fileRange.encloses(r)) continue;

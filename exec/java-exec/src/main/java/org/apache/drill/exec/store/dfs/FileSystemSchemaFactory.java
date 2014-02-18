@@ -43,6 +43,13 @@ public class FileSystemSchemaFactory implements SchemaFactory{
   private WorkspaceSchemaFactory[] factories;
   private String schemaName;
   
+  
+  public FileSystemSchemaFactory(String schemaName, WorkspaceSchemaFactory[] factories) {
+    super();
+    this.schemaName = schemaName;
+    this.factories = factories;
+  }
+
   @Override
   public void add(SchemaPlus parent) {
     FileSystemSchema schema = new FileSystemSchema(parent, schemaName);

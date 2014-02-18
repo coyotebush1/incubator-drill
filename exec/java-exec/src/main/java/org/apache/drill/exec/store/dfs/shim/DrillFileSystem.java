@@ -19,7 +19,6 @@ public abstract class DrillFileSystem implements AutoCloseable{
   
   public abstract BlockLocation[] getBlockLocations(FileStatus status, long start, long length) throws IOException;
   public abstract List<FileStatus> list(boolean recursive, Path... paths) throws IOException;
-  public abstract List<FileStatus> listByPattern(boolean recursive, Path pattern) throws IOException;
   public abstract FileStatus getFileStatus(Path p) throws IOException;
   public abstract DrillOutputStream create(Path p) throws IOException;
   public abstract DrillInputStream open(Path p) throws IOException;
