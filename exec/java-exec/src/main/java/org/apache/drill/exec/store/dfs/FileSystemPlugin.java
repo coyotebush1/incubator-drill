@@ -1,18 +1,24 @@
 package org.apache.drill.exec.store.dfs;
 
 import java.io.IOException;
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
-import java.util.regex.Pattern;
 
 import net.hydromatic.optiq.SchemaPlus;
 
+import org.apache.drill.common.exceptions.ExecutionSetupException;
+import org.apache.drill.common.logical.FormatPluginConfig;
 import org.apache.drill.common.logical.data.Scan;
 import org.apache.drill.exec.physical.base.AbstractGroupScan;
 import org.apache.drill.exec.server.DrillbitContext;
 import org.apache.drill.exec.store.AbstractStoragePlugin;
-import org.apache.hadoop.fs.FileSystem;
+import org.apache.drill.exec.store.dfs.shim.DrillFileSystem;
+import org.apache.drill.exec.store.dfs.shim.FileSystemCreator;
+import org.apache.hadoop.conf.Configuration;
 
-import com.fasterxml.jackson.core.type.TypeReference;
+import com.beust.jcommander.internal.Lists;
+import com.beust.jcommander.internal.Maps;
 
 /**
  * A Storage engine associated with a Hadoop FileSystem Implementation. Examples include HDFS, MapRFS, QuantacastFileSystem,
@@ -23,18 +29,42 @@ import com.fasterxml.jackson.core.type.TypeReference;
 public class FileSystemPlugin extends AbstractStoragePlugin{
   static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(FileSystemPlugin.class);
 
-  private FileSystemSchemaFactory schemaFactory;
-  private FileSystem fs;
-  private Map<Pattern, FormatPlugin> fileMatchers;
-  private Map<String, FormatPlugin> enginesByName;
+  private final FileSystemSchemaFactory schemaFactory;
+  private Map<String, FormatPlugin> formatsByName;
   private Map<FormatPluginConfig, FormatPlugin> formatPluginsByConfig;
   private FileSystemConfig config;
   private DrillbitContext context;
+  private final DrillFileSystem fs;
   
-  public FileSystemPlugin(FileSystemConfig config, DrillbitContext context, String name){
-    WorkspaceSchemaFactory[] factories = null;
-    this.schemaFactory = new FileSystemSchemaFactory(name, factories);
-    this.context = context;
+  public FileSystemPlugin(FileSystemConfig config, DrillbitContext context, String name) throws ExecutionSetupException{
+    try{
+      this.config = config;
+      this.context = context;
+      
+      Configuration fsConf = new Configuration();
+      fsConf.set("fs.default.name", config.connection);
+      this.fs = FileSystemCreator.getFileSystem(context.getConfig(), fsConf);
+      this.formatsByName = FormatCreator.getFormatPlugins(context, fs, config);
+      List<FormatMatcher> matchers = Lists.newArrayList();
+      formatPluginsByConfig = Maps.newHashMap();
+      for(FormatPlugin p : formatsByName.values()){
+        matchers.add(p.getMatcher());
+        formatPluginsByConfig.put(p.getConfig(), p);
+      }
+      
+      List<WorkspaceSchemaFactory> factories = null;
+      if(config.workspaces == null || config.workspaces.isEmpty()){
+        factories = Collections.singletonList(new WorkspaceSchemaFactory("default", name, fs, "/", matchers));
+      }else{
+        factories = Lists.newArrayList();
+        for(Map.Entry<String, String> space : config.workspaces.entrySet()){
+          factories.add(new WorkspaceSchemaFactory(space.getKey(), name, fs, space.getValue(), matchers));
+        }
+      }
+      this.schemaFactory = new FileSystemSchemaFactory(name, factories);
+    }catch(IOException e){
+      throw new ExecutionSetupException("Failure setting up file system plugin.", e);
+    }
   }
   
   @Override
@@ -45,7 +75,12 @@ public class FileSystemPlugin extends AbstractStoragePlugin{
   @Override
   public AbstractGroupScan getPhysicalScan(Scan scan) throws IOException {
     FormatSelection formatSelection = scan.getSelection().getWith(context.getConfig(), FormatSelection.class);
-    FormatPlugin plugin = enginesByName.get(formatSelection.format);
+    FormatPlugin plugin;
+    if(formatSelection.format instanceof NamedFormatPluginConfig){
+      plugin = formatsByName.get( ((NamedFormatPluginConfig) formatSelection.format).name);
+    }else{
+      plugin = formatPluginsByConfig.get(formatSelection.format);
+    }
     if(plugin == null) throw new IOException(String.format("Failure getting requested format plugin named '%s'.  It was not one of the format plugins registered.", formatSelection.format));
     return plugin.getGroupScan(scan.getOutputReference(), formatSelection.selection);
   }
@@ -56,18 +91,15 @@ public class FileSystemPlugin extends AbstractStoragePlugin{
   }
   
   public FormatPlugin getFormatPlugin(String name){
-    return enginesByName.get(name);
+    return formatsByName.get(name);
   }
   
   public FormatPlugin getFormatPlugin(FormatPluginConfig config){
     if(config instanceof NamedFormatPluginConfig){
-      return enginesByName.get(((NamedFormatPluginConfig) config).name);
+      return formatsByName.get(((NamedFormatPluginConfig) config).name);
     }else{
       return formatPluginsByConfig.get(config);
     }
   }
 
-  public FormatPlugin getDefaultPlugin(){
-    return enginesByName.get(config.defaultFormat);
-  }
 }

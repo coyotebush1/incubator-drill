@@ -17,10 +17,21 @@
  */
 package org.apache.drill.exec.store.parquet;
 
-import org.apache.drill.exec.store.dfs.FormatPluginConfig;
+import org.apache.drill.common.logical.FormatPluginConfig;
 
 import com.fasterxml.jackson.annotation.JsonTypeName;
 
 @JsonTypeName("parquet")
 public class ParquetFormatConfig implements FormatPluginConfig{
+
+  @Override
+  public int hashCode() {
+    return 7;
+  }
+
+  @Override
+  public boolean equals(Object obj) {
+    return obj instanceof ParquetFormatConfig;
+  }
+  
 }

@@ -7,6 +7,7 @@ import java.util.List;
 import org.apache.drill.common.exceptions.ExecutionSetupException;
 import org.apache.drill.common.expression.FieldReference;
 import org.apache.drill.common.expression.SchemaPath;
+import org.apache.drill.common.logical.FormatPluginConfig;
 import org.apache.drill.common.logical.StoragePluginConfig;
 import org.apache.drill.exec.ops.FragmentContext;
 import org.apache.drill.exec.physical.base.AbstractGroupScan;
@@ -19,7 +20,6 @@ import org.apache.drill.exec.store.dfs.BasicFormatMatcher;
 import org.apache.drill.exec.store.dfs.FileSelection;
 import org.apache.drill.exec.store.dfs.FormatMatcher;
 import org.apache.drill.exec.store.dfs.FormatPlugin;
-import org.apache.drill.exec.store.dfs.FormatPluginConfig;
 import org.apache.drill.exec.store.dfs.shim.DrillFileSystem;
 
 import com.beust.jcommander.internal.Lists;
@@ -32,14 +32,16 @@ public abstract class EasyFormatPlugin<T extends FormatPluginConfig> implements 
   private final boolean readable;
   private final boolean writable;
   private final boolean blockSplittable;
+  private final String defaultName;
   private final DrillFileSystem fs;
   
-  protected EasyFormatPlugin(DrillbitContext context, DrillFileSystem fs, DrillFileSystem config, T formatPluginConfig, boolean readable, boolean writable, boolean blockSplittable, String extension){
+  protected EasyFormatPlugin(DrillbitContext context, DrillFileSystem fs, DrillFileSystem config, T formatPluginConfig, boolean readable, boolean writable, boolean blockSplittable, String extension, String defaultName){
     this.matcher = new BasicFormatMatcher(this, fs, extension);
     this.readable = readable;
     this.writable = writable;
     this.context = context;
     this.blockSplittable = blockSplittable;
+    this.defaultName = defaultName;
     this.fs = fs;
   }
   
@@ -51,6 +53,11 @@ public abstract class EasyFormatPlugin<T extends FormatPluginConfig> implements 
   @Override
   public DrillbitContext getContext() {
     return context;
+  }
+  
+  @Override
+  public String getDefaultName() {
+    return defaultName;
   }
 
   /**

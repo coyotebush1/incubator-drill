@@ -32,6 +32,7 @@ import net.hydromatic.optiq.SchemaPlus;
 
 import org.apache.drill.common.config.DrillConfig;
 import org.apache.drill.common.exceptions.ExecutionSetupException;
+import org.apache.drill.common.logical.FormatPluginConfig;
 import org.apache.drill.common.logical.StoragePluginConfig;
 import org.apache.drill.common.util.PathScanner;
 import org.apache.drill.exec.ExecConstants;
@@ -39,7 +40,6 @@ import org.apache.drill.exec.planner.logical.StorageEngines;
 import org.apache.drill.exec.server.DrillbitContext;
 import org.apache.drill.exec.store.dfs.FileSystemPlugin;
 import org.apache.drill.exec.store.dfs.FormatPlugin;
-import org.apache.drill.exec.store.dfs.FormatPluginConfig;
 
 import com.google.common.base.Charsets;
 import com.google.common.collect.ImmutableMap;

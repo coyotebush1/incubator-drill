@@ -27,6 +27,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 import org.apache.drill.common.exceptions.DrillConfigurationException;
 import org.apache.drill.common.expression.LogicalExpression;
+import org.apache.drill.common.logical.FormatPluginConfigBase;
 import org.apache.drill.common.logical.StoragePluginConfigBase;
 import org.apache.drill.common.logical.data.LogicalOperatorBase;
 import org.apache.drill.common.util.PathScanner;
@@ -69,6 +70,7 @@ public final class DrillConfig extends NestedConfig{
     mapper.configure(Feature.ALLOW_COMMENTS, true);
     mapper.registerSubtypes(LogicalOperatorBase.getSubTypes(this));
     mapper.registerSubtypes(StoragePluginConfigBase.getSubTypes(this));
+    mapper.registerSubtypes(FormatPluginConfigBase.getSubTypes(this));
     
     RuntimeMXBean bean = ManagementFactory.getRuntimeMXBean();
     this.startupArguments = ImmutableList.copyOf(bean.getInputArguments());

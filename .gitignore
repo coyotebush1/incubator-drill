@@ -6,4 +6,5 @@
 *.iml
 target/
 *.DS_Store
+*.patch
 *~

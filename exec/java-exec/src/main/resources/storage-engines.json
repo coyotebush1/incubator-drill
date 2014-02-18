@@ -1,21 +1,9 @@
 {
   "storage":{
-    local: {
-      type: "fs"
-      connect: "file:///"
-      paths: {
-        default: "/user/home/",
-        root: "/"
-      }
-    },  
     dfs: {
-      type: "fs"
-      connect: "file:///"
-      paths: {
-        default: "/"
-      }
-    },
-    
+      type: "file",
+      connection: "file:///"
+    },  
     hive :
       {
         type:"hive",

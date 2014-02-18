@@ -20,11 +20,9 @@ package org.apache.drill.exec.store.parquet;
 import static parquet.column.Encoding.PLAIN;
 
 import java.util.HashMap;
-import java.util.Map;
 
 import org.apache.drill.common.types.TypeProtos;
 import org.apache.drill.exec.store.ByteArrayUtil;
-import org.apache.drill.exec.store.easy.json.JsonSchemaProvider;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -98,7 +96,7 @@ public class TestFileGenerator {
     WrapAroundCounter booleanBitCounter = new WrapAroundCounter(7);
 
     Configuration configuration = new Configuration();
-    configuration.set(JsonSchemaProvider.HADOOP_DEFAULT_NAME, "file:///");
+    configuration.set("fs.default.name", "file:///");
     //"message m { required int32 integer; required int64 integer64; required boolean b; required float f; required double d;}"
 
     FileSystem fs = FileSystem.get(configuration);

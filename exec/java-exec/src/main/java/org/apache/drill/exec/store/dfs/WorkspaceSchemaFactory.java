@@ -22,6 +22,7 @@ import java.net.URISyntaxException;
 import java.util.List;
 import java.util.Set;
 
+import org.apache.drill.common.exceptions.ExecutionSetupException;
 import org.apache.drill.exec.planner.logical.DrillTable;
 import org.apache.drill.exec.planner.logical.DynamicDrillTable;
 import org.apache.drill.exec.planner.sql.ExpandingConcurrentMap;
@@ -45,7 +46,7 @@ public class WorkspaceSchemaFactory implements ExpandingConcurrentMap.MapValueFa
   private final String schemaName;
 
   public WorkspaceSchemaFactory(String schemaName, String storageEngineName, DrillFileSystem fileSystem, String path,
-      List<FormatMatcher> formatMatchers) throws IOException, URISyntaxException {
+      List<FormatMatcher> formatMatchers) throws ExecutionSetupException {
     this.fs = fileSystem;
     this.root = new Path(path);
     this.fileMatchers = Lists.newArrayList();

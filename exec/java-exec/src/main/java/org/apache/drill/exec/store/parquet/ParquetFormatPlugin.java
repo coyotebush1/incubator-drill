@@ -24,12 +24,10 @@ import java.util.regex.Pattern;
 
 import org.apache.drill.common.expression.FieldReference;
 import org.apache.drill.common.logical.StoragePluginConfig;
-import org.apache.drill.exec.physical.base.AbstractGroupScan;
 import org.apache.drill.exec.server.DrillbitContext;
 import org.apache.drill.exec.store.QueryOptimizerRule;
 import org.apache.drill.exec.store.dfs.BasicFormatMatcher;
 import org.apache.drill.exec.store.dfs.FileSelection;
-import org.apache.drill.exec.store.dfs.FileSystemFormatConfig;
 import org.apache.drill.exec.store.dfs.FormatMatcher;
 import org.apache.drill.exec.store.dfs.FormatPlugin;
 import org.apache.drill.exec.store.dfs.FormatSelection;
@@ -38,7 +36,6 @@ import org.apache.drill.exec.store.dfs.shim.DrillFileSystem;
 import org.apache.drill.exec.store.mock.MockStorageEngine;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 
 import parquet.format.converter.ParquetMetadataConverter;
@@ -58,7 +55,11 @@ public class ParquetFormatPlugin implements FormatPlugin{
   private final ParquetFormatConfig config;
   private final StoragePluginConfig storageConfig;
   
-  public ParquetFormatPlugin(StoragePluginConfig storageConfig, DrillFileSystem fs, ParquetFormatConfig formatConfig, DrillbitContext context){
+  public ParquetFormatPlugin(DrillbitContext context, DrillFileSystem fs, StoragePluginConfig storageConfig){
+    this(context, fs, storageConfig, new ParquetFormatConfig());
+  }
+  
+  public ParquetFormatPlugin(DrillbitContext context, DrillFileSystem fs, StoragePluginConfig storageConfig, ParquetFormatConfig formatConfig){
     this.context = context;
     this.codecFactoryExposer = new CodecFactoryExposer(fs.getUnderlying().getConf());
     this.config = formatConfig;
@@ -111,6 +112,12 @@ public class ParquetFormatPlugin implements FormatPlugin{
   @Override
   public boolean supportsWrite() {
     return false;
+  }
+
+  
+  @Override
+  public String getDefaultName() {
+    return "parquet";
   }
 
   @Override

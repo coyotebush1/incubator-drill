@@ -18,6 +18,7 @@
 package org.apache.drill.exec.store.dfs;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -40,11 +41,11 @@ import com.google.common.collect.Maps;
 public class FileSystemSchemaFactory implements SchemaFactory{
   static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(FileSystemSchemaFactory.class);
 
-  private WorkspaceSchemaFactory[] factories;
+  private List<WorkspaceSchemaFactory> factories;
   private String schemaName;
   
   
-  public FileSystemSchemaFactory(String schemaName, WorkspaceSchemaFactory[] factories) {
+  public FileSystemSchemaFactory(String schemaName, List<WorkspaceSchemaFactory> factories) {
     super();
     this.schemaName = schemaName;
     this.factories = factories;

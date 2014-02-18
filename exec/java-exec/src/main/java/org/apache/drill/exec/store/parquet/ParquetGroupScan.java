@@ -18,6 +18,7 @@
 package org.apache.drill.exec.store.parquet;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -26,6 +27,7 @@ import org.apache.drill.common.exceptions.ExecutionSetupException;
 import org.apache.drill.common.exceptions.PhysicalOperatorSetupException;
 import org.apache.drill.common.expression.FieldReference;
 import org.apache.drill.common.expression.SchemaPath;
+import org.apache.drill.common.logical.FormatPluginConfig;
 import org.apache.drill.common.logical.StoragePluginConfig;
 import org.apache.drill.exec.metrics.DrillMetrics;
 import org.apache.drill.exec.physical.EndpointAffinity;
@@ -36,7 +38,6 @@ import org.apache.drill.exec.physical.base.Size;
 import org.apache.drill.exec.proto.CoordinationProtos.DrillbitEndpoint;
 import org.apache.drill.exec.store.StoragePluginRegistry;
 import org.apache.drill.exec.store.dfs.FileSystemPlugin;
-import org.apache.drill.exec.store.dfs.FormatPluginConfig;
 import org.apache.drill.exec.store.dfs.ReadEntryFromHDFS;
 import org.apache.drill.exec.store.dfs.ReadEntryWithPath;
 import org.apache.drill.exec.store.dfs.easy.FileWork;
@@ -241,7 +242,19 @@ public class ParquetGroupScan extends AbstractGroupScan {
    */
   @Override
   public List<EndpointAffinity> getOperatorAffinity() {
+    
     if (this.endpointAffinities == null) {
+      BlockMapBuilder bmb = new BlockMapBuilder(fs, formatPlugin.getContext().getBits());
+      try{
+        for (RowGroupInfo rgi : rowGroupInfos) {
+          EndpointByteMap ebm = bmb.getEndpointByteMap(rgi);
+          rgi.setEndpointByteMap(ebm);
+        }
+      } catch (IOException e) {
+        logger.warn("Failure while determining operator affinity.", e);
+        return Collections.emptyList();
+      }
+
       this.endpointAffinities = AffinityCreator.getAffinityMap(rowGroupInfos);
     }
     return this.endpointAffinities;
@@ -249,17 +262,7 @@ public class ParquetGroupScan extends AbstractGroupScan {
 
   @Override
   public void applyAssignments(List<DrillbitEndpoint> incomingEndpoints) throws PhysicalOperatorSetupException {
-    BlockMapBuilder bmb = new BlockMapBuilder(fs, incomingEndpoints);
-    try{
-    for (RowGroupInfo rgi : rowGroupInfos) {
-      EndpointByteMap ebm = bmb.getEndpointByteMap(rgi);
-      rgi.setEndpointByteMap(ebm);
-    }
-    } catch (IOException e) {
-      throw new PhysicalOperatorSetupException("Failure whiel generating endpoint byte map.", e);
-    }finally{
-      
-    }
+
     this.mappings = AssignmentCreator.getMappings(incomingEndpoints, rowGroupInfos);
 
   }

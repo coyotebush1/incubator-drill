@@ -39,7 +39,7 @@ public class AffinityCreator {
       affinityList.add(new EndpointAffinity(d.key, d.value));
     }
 
-    logger.debug("Took {} ms to get operator affinity", watch.stop().elapsed(TimeUnit.MILLISECONDS));
+    logger.debug("Took {} ms to get operator affinity", watch.elapsed(TimeUnit.MILLISECONDS));
     return affinityList;
   }
 }

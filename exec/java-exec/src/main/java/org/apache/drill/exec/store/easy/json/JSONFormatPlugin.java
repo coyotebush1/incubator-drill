@@ -22,10 +22,10 @@ import java.util.List;
 import org.apache.drill.common.exceptions.ExecutionSetupException;
 import org.apache.drill.common.expression.FieldReference;
 import org.apache.drill.common.expression.SchemaPath;
+import org.apache.drill.common.logical.FormatPluginConfig;
 import org.apache.drill.exec.ops.FragmentContext;
 import org.apache.drill.exec.server.DrillbitContext;
 import org.apache.drill.exec.store.RecordReader;
-import org.apache.drill.exec.store.dfs.FormatPluginConfig;
 import org.apache.drill.exec.store.dfs.easy.EasyFormatPlugin;
 import org.apache.drill.exec.store.dfs.easy.FileWork;
 import org.apache.drill.exec.store.dfs.shim.DrillFileSystem;
@@ -35,8 +35,12 @@ import com.fasterxml.jackson.annotation.JsonTypeName;
 
 public class JSONFormatPlugin extends EasyFormatPlugin<JSONFormatConfig> {
 
+  public JSONFormatPlugin(DrillbitContext context, DrillFileSystem fs, DrillFileSystem config) {
+    this(context, fs, config, new JSONFormatConfig());
+  }
+  
   public JSONFormatPlugin(DrillbitContext context, DrillFileSystem fs, DrillFileSystem config, JSONFormatConfig formatPluginConfig) {
-    super(context, fs, config, formatPluginConfig, true, false, false, "json");
+    super(context, fs, config, formatPluginConfig, true, false, false, "json", "json");
   }
   
   @Override

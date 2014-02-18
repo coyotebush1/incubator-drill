@@ -27,6 +27,7 @@ public class EndpointByteMapImpl implements EndpointByteMap{
   }
   
   public void add(DrillbitEndpoint endpoint, long bytes){
+    assert endpoint != null;
     maxBytes = Math.max(maxBytes, map.putOrAdd(endpoint, bytes, bytes)+1);
   }
 

@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.List;
 
 import org.apache.drill.common.expression.FieldReference;
+import org.apache.drill.common.logical.FormatPluginConfig;
 import org.apache.drill.common.logical.StoragePluginConfig;
 import org.apache.drill.exec.physical.base.AbstractGroupScan;
 import org.apache.drill.exec.server.DrillbitContext;
@@ -29,5 +30,6 @@ public interface FormatPlugin {
   public StoragePluginConfig getStorageConfig();
   public DrillFileSystem getFileSystem();
   public DrillbitContext getContext();
+  public String getDefaultName();
   
 }

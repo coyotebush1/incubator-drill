@@ -180,7 +180,11 @@ public class BlockMapBuilder {
       // For each host in the current block location, add the intersecting bytes to the corresponding endpoint
       for (String host : hosts) {
         DrillbitEndpoint endpoint = getDrillBitEndpoint(host);
-        endpointByteMap.add(endpoint, bytes);
+        if(endpoint != null){
+          endpointByteMap.add(endpoint, bytes);
+        }else{
+          logger.debug("Failure finding Drillbit running on host {}.  Skipping affinity to that host.", host);
+        }
       }
     }
 
