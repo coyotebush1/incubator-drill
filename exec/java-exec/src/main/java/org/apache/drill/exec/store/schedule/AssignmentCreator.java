@@ -1,3 +1,20 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.drill.exec.store.schedule;
 
 import java.util.ArrayList;
@@ -24,7 +41,7 @@ public class AssignmentCreator<T extends CompleteWork> {
   private final ArrayListMultimap<Integer, T> mappings;
   private final List<DrillbitEndpoint> endpoints;
 
-  public int fragmentPointer = 0;
+  
 
   /**
    * Given a set of endpoints to assign work to, attempt to evenly assign work based on affinity of work units to
@@ -78,6 +95,7 @@ public class AssignmentCreator<T extends CompleteWork> {
    */
   private void scanAndAssign(List<T> workunits, double requiredPercentage, boolean assignAll) {
     Collections.sort(workunits);
+    int fragmentPointer = 0;
     final boolean requireAffinity = requiredPercentage > 0;
     int maxAssignments = (int) (workunits.size() / endpoints.size());
 

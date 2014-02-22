@@ -22,12 +22,10 @@
       storageengine:"dfs",
       selection: {
         format: {type: "parquet"},
-        selection: {
-        paths: [
+        files: [
           "/tmp/parquet_test_file_many_types",
           "/tmp/parquet_test_file_many_types"
         ]
-        }
       }
     },
     {

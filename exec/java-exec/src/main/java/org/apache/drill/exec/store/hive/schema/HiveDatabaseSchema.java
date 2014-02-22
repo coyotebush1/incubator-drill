@@ -44,8 +44,8 @@ public class HiveDatabaseSchema extends AbstractSchema{
   }
 
   @Override
-  public DrillTable getTable(String name) {
-    return hiveSchema.getTable(name);
+  public DrillTable getTable(String tableName) {
+    return hiveSchema.getDrillTable(this.name, tableName);
   }
 
   @Override

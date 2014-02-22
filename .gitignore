@@ -3,6 +3,8 @@
 .classpath
 .settings/
 .idea/
+*.log
+*.lck
 *.iml
 target/
 *.DS_Store

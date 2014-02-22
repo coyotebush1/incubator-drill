@@ -1,3 +1,20 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.drill.exec.store.hive.schema;
 
 import java.util.Collections;
@@ -15,6 +32,7 @@ import org.apache.drill.exec.store.AbstractSchema;
 import org.apache.drill.exec.store.SchemaFactory;
 import org.apache.drill.exec.store.SchemaHolder;
 import org.apache.drill.exec.store.hive.HiveReadEntry;
+import org.apache.drill.exec.store.hive.HiveStoragePluginConfig;
 import org.apache.drill.exec.store.hive.HiveTable;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.HiveMetaStoreClient;
@@ -39,11 +57,12 @@ public class HiveSchemaFactory implements SchemaFactory {
   private LoadingCache<String, List<String>> databases;
   private LoadingCache<String, List<String>> tableNameLoader;
   private LoadingCache<String, LoadingCache<String, HiveReadEntry>> tableLoaders;
-
+  private HiveStoragePluginConfig pluginConfig;
   private final String schemaName;
 
-  public HiveSchemaFactory(String name, HiveConf hiveConf) throws ExecutionSetupException {
+  public HiveSchemaFactory(HiveStoragePluginConfig pluginConfig, String name, HiveConf hiveConf) throws ExecutionSetupException {
     this.schemaName = name;
+    this.pluginConfig = pluginConfig;
     
     try {
       this.mClient = new HiveMetaStoreClient(hiveConf);
@@ -152,10 +171,11 @@ public class HiveSchemaFactory implements SchemaFactory {
   }
 
   @Override
-  public void add(SchemaPlus parent) {
+  public Schema add(SchemaPlus parent) {
     HiveSchema schema = new HiveSchema(new SchemaHolder(parent), schemaName);
     SchemaPlus hPlus = parent.add(schema);
     schema.holder.setSchema(hPlus);
+    return schema;
   }
 
   class HiveSchema extends AbstractSchema {
@@ -166,8 +186,9 @@ public class HiveSchemaFactory implements SchemaFactory {
     
     public HiveSchema(SchemaHolder parentSchema, String name) {
       super(parentSchema, name);
+      getSubSchema("default");
     }
-
+    
     @Override
     public Schema getSubSchema(String name) {
       List<String> tables;
@@ -198,34 +219,46 @@ public class HiveSchemaFactory implements SchemaFactory {
 
     @Override
     public DrillTable getTable(String name) {
-      if(defaultSchema == null) super.getTable(name);
+      if(defaultSchema == null){ 
+        return super.getTable(name);
+      }
       return defaultSchema.getTable(name);
     }
 
     @Override
     public Set<String> getTableNames() {
-      if(defaultSchema == null) super.getTableNames();
+      if(defaultSchema == null){
+        return super.getTableNames();
+      }
       return defaultSchema.getTableNames();
     }
 
+    List<String> getTableNames(String dbName){
+      try{
+        return tableNameLoader.get(dbName);
+      }catch(ExecutionException e){
+        logger.warn("Failure while loading table names for database '{}'.", dbName, e.getCause());
+        return Collections.emptyList();
+      }
+    }
+    
+    DrillTable getDrillTable(String dbName, String t){
+      HiveReadEntry entry = getSelectionBaseOnName(dbName, t);
+      if(entry == null) return null;
+      return new DrillHiveTable(schemaName, entry, pluginConfig);
+    }
+    
+    HiveReadEntry getSelectionBaseOnName(String dbName, String t) {
+      if(dbName == null) dbName = "default";
+      try{
+        return tableLoaders.get(dbName).get(t);
+      }catch(ExecutionException e){
+        logger.warn("Exception occurred while trying to read table. {}.{}", dbName, t, e.getCause());
+        return null;
+      }
+    }
+    
   }
 
-  List<String> getTableNames(String dbName){
-    try{
-      return this.tableNameLoader.get(dbName);
-    }catch(ExecutionException e){
-      logger.warn("Failure while loading table names for database '{}'.", dbName, e.getCause());
-      return Collections.emptyList();
-    }
-  }
-  
-  HiveReadEntry getSelectionBaseOnName(String dbName, String t) {
-    if(dbName == null) dbName = "default";
-    try{
-      return tableLoaders.get(dbName).get(t);
-    }catch(ExecutionException e){
-      logger.warn("Exception occurred while trying to read table. {}.{}", dbName, t, e.getCause());
-      return null;
-    }
-  }
+
 }

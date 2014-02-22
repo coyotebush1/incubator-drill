@@ -20,6 +20,7 @@ package org.apache.drill.exec.store.mock;
 import java.io.IOException;
 import java.util.ArrayList;
 
+import net.hydromatic.optiq.Schema;
 import net.hydromatic.optiq.SchemaPlus;
 
 import org.apache.drill.common.logical.data.Scan;
@@ -34,7 +35,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 public class MockStorageEngine extends AbstractStoragePlugin {
   static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(MockStorageEngine.class);
 
-  public MockStorageEngine(MockStorageEngineConfig configuration, DrillbitContext context) {
+  public MockStorageEngine(MockStorageEngineConfig configuration, DrillbitContext context, String name) {
 
   }
 
@@ -49,8 +50,8 @@ public class MockStorageEngine extends AbstractStoragePlugin {
   }
 
   @Override
-  public void createAndAddSchema(SchemaPlus parent) {
-    // NOOP: can't hit mock scan from SQL.
+  public Schema createAndAddSchema(SchemaPlus parent) {
+    return null;
   }
 
 

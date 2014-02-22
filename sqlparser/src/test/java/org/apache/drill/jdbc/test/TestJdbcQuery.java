@@ -38,34 +38,45 @@ public class TestJdbcQuery {
   static final boolean IS_DEBUG = java.lang.management.ManagementFactory.getRuntimeMXBean().getInputArguments().toString().indexOf("-agentlib:jdwp") > 0;
 
   // Set a timeout unless we're debugging.
-  @Rule public TestRule TIMEOUT = TestTools.getTimeoutRule();
+  @Rule public TestRule TIMEOUT = TestTools.getTimeoutRule(20000);
 
   static{
     Driver.load();
   }
   
+  @Test
+  public void testHiveRead() throws Exception{
+    testQuery("select * from hive.kv_text");
+  }
+
+  @Test
+  public void testJsonQuery() throws Exception{
+    testQuery("select * from cp.`employee.json`");
+  }
+
+  
   @Test 
   public void testCast() throws Exception{
-    testQuery("select R_REGIONKEY, cast(R_NAME as varchar(15)) as region, cast(R_COMMENT as varchar(255)) as comment from parquet.`/Users/jnadeau/region.parquet`");    
+    testQuery("select R_REGIONKEY, cast(R_NAME as varchar(15)) as region, cast(R_COMMENT as varchar(255)) as comment from dfs.`/Users/jnadeau/region.parquet`");    
   }
   @Test 
   public void testWildcard() throws Exception{
-    testQuery("select * from parquet.`/Users/jnadeau/region.parquet`");
+    testQuery("select * from dfs.`/Users/jnadeau/region.parquet`");
   }
   
   @Test 
   public void testLogicalExplain() throws Exception{
-    testQuery("EXPLAIN PLAN WITHOUT IMPLEMENTATION FOR select * from parquet.`/Users/jnadeau/region.parquet`");
+    testQuery("EXPLAIN PLAN WITHOUT IMPLEMENTATION FOR select * from dfs.`/Users/jnadeau/region.parquet`");
   }
 
   @Test 
   public void testPhysicalExplain() throws Exception{
-    testQuery("EXPLAIN PLAN FOR select * from parquet.`/Users/jnadeau/region.parquet`");
+    testQuery("EXPLAIN PLAN FOR select * from dfs.`/Users/jnadeau/region.parquet`");
   }
   
   @Test 
   public void checkUnknownColumn() throws Exception{
-    testQuery("select unknownColumn from parquet.`/Users/jnadeau/region.parquet`");
+    testQuery("select unknownColumn from dfs.`/Users/jnadeau/region.parquet`");
   }
 
   

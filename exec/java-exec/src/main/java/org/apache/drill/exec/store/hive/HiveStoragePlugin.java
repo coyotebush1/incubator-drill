@@ -19,6 +19,7 @@ package org.apache.drill.exec.store.hive;
 
 import java.io.IOException;
 
+import net.hydromatic.optiq.Schema;
 import net.hydromatic.optiq.SchemaPlus;
 
 import org.apache.drill.common.exceptions.ExecutionSetupException;
@@ -44,7 +45,7 @@ public class HiveStoragePlugin extends AbstractStoragePlugin {
   public HiveStoragePlugin(HiveStoragePluginConfig config, DrillbitContext context, String name) throws ExecutionSetupException {
     this.config = config;
     this.context = context;
-    this.schemaFactory = new HiveSchemaFactory(name, config.getHiveConf());
+    this.schemaFactory = new HiveSchemaFactory(config, name, config.getHiveConf());
     this.hiveConf = config.getHiveConf();
     this.name = name;
   }
@@ -72,8 +73,8 @@ public class HiveStoragePlugin extends AbstractStoragePlugin {
   }
 
   @Override
-  public void createAndAddSchema(SchemaPlus parent) {
-    schemaFactory.add(parent);
+  public Schema createAndAddSchema(SchemaPlus parent) {
+    return schemaFactory.add(parent);
   }
 
 

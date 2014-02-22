@@ -52,9 +52,10 @@ public class FileSystemSchemaFactory implements SchemaFactory{
   }
 
   @Override
-  public void add(SchemaPlus parent) {
+  public Schema add(SchemaPlus parent) {
     FileSystemSchema schema = new FileSystemSchema(parent, schemaName);
     schema.selfHolder.setSchema(parent.add(schema));
+    return schema;
   }
 
   public class FileSystemSchema extends AbstractSchema{

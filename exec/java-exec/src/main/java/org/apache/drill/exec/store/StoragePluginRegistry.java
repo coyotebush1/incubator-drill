@@ -55,9 +55,14 @@ public class StoragePluginRegistry implements Iterable<Map.Entry<String, Storage
   private final DrillSchemaFactory schemaFactory = new DrillSchemaFactory();
   
   public StoragePluginRegistry(DrillbitContext context) {
+    try{
     this.context = context;
     init(context.getConfig());
     this.engines = ImmutableMap.copyOf(createEngines());
+    }catch(RuntimeException e){
+      logger.error("Failure while loading storage engine registry.", e);
+      throw new RuntimeException("Faiure while reading and loading storage plugin configuration.", e);
+    }
   }
 
   @SuppressWarnings("unchecked")
@@ -154,10 +159,12 @@ public class StoragePluginRegistry implements Iterable<Map.Entry<String, Storage
 
     @Override
     public Schema apply(SchemaPlus parent) {
+      Schema defaultSchema = null;
       for(Map.Entry<String, StoragePlugin> e : engines.entrySet()){
-        e.getValue().createAndAddSchema(parent);
+        Schema s = e.getValue().createAndAddSchema(parent);
+        if(defaultSchema == null) defaultSchema = s;
       }
-      return null;
+      return defaultSchema;
     }
     
   }

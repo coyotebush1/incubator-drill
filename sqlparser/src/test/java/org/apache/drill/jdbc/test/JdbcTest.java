@@ -184,7 +184,7 @@ public class JdbcTest {
     config = seConfigs.get("queue");
 //    Assert.assertTrue(config != null && config instanceof QueueRSE.QueueRSEConfig);
     Scan scan = findOnlyOperator(plan, Scan.class);
-    Assert.assertEquals("donuts-json", scan.getStoragePluginName());
+    Assert.assertEquals("donuts-json", scan.getStorageEngine());
     Assert.assertEquals("_MAP", scan.getOutputReference().getPath());
     Project project = findOnlyOperator(plan, Project.class);
     Assert.assertEquals(1, project.getSelections().length);
@@ -240,7 +240,7 @@ public class JdbcTest {
     config = seConfigs.get("queue");
 //    Assert.assertTrue(config != null && config instanceof QueueRSE.QueueRSEConfig);
     Scan scan = findOnlyOperator(plan, Scan.class);
-    Assert.assertEquals("donuts-json", scan.getStoragePluginName());
+    Assert.assertEquals("donuts-json", scan.getStorageEngine());
     Assert.assertEquals("_MAP", scan.getOutputReference().getPath());
     Filter filter = findOnlyOperator(plan, Filter.class);
     Assert.assertTrue(filter.getInput() instanceof Scan);

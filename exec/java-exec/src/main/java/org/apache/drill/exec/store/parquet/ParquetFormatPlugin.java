@@ -54,18 +54,20 @@ public class ParquetFormatPlugin implements FormatPlugin{
   private final ParquetFormatMatcher formatMatcher;
   private final ParquetFormatConfig config;
   private final StoragePluginConfig storageConfig;
+  private final String name;
   
-  public ParquetFormatPlugin(DrillbitContext context, DrillFileSystem fs, StoragePluginConfig storageConfig){
-    this(context, fs, storageConfig, new ParquetFormatConfig());
+  public ParquetFormatPlugin(String name, DrillbitContext context, DrillFileSystem fs, StoragePluginConfig storageConfig){
+    this(name, context, fs, storageConfig, new ParquetFormatConfig());
   }
   
-  public ParquetFormatPlugin(DrillbitContext context, DrillFileSystem fs, StoragePluginConfig storageConfig, ParquetFormatConfig formatConfig){
+  public ParquetFormatPlugin(String name, DrillbitContext context, DrillFileSystem fs, StoragePluginConfig storageConfig, ParquetFormatConfig formatConfig){
     this.context = context;
     this.codecFactoryExposer = new CodecFactoryExposer(fs.getUnderlying().getConf());
     this.config = formatConfig;
     this.formatMatcher = new ParquetFormatMatcher(this, fs);
     this.storageConfig = storageConfig;
     this.fs = fs;
+    this.name = name == null ? "parquet" : name;
   }
 
   Configuration getHadoopConfig() {
@@ -109,16 +111,16 @@ public class ParquetFormatPlugin implements FormatPlugin{
     return codecFactoryExposer;
   }
 
+  public String getName(){
+    return name;
+  }
+  
   @Override
   public boolean supportsWrite() {
     return false;
   }
 
-  
-  @Override
-  public String getDefaultName() {
-    return "parquet";
-  }
+
 
   @Override
   public FormatMatcher getMatcher() {

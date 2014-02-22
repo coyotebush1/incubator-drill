@@ -23,6 +23,7 @@ import org.apache.drill.common.exceptions.ExecutionSetupException;
 import org.apache.drill.common.expression.FieldReference;
 import org.apache.drill.common.expression.SchemaPath;
 import org.apache.drill.common.logical.FormatPluginConfig;
+import org.apache.drill.common.logical.StoragePluginConfig;
 import org.apache.drill.exec.ops.FragmentContext;
 import org.apache.drill.exec.server.DrillbitContext;
 import org.apache.drill.exec.store.RecordReader;
@@ -35,12 +36,12 @@ import com.fasterxml.jackson.annotation.JsonTypeName;
 
 public class JSONFormatPlugin extends EasyFormatPlugin<JSONFormatConfig> {
 
-  public JSONFormatPlugin(DrillbitContext context, DrillFileSystem fs, DrillFileSystem config) {
-    this(context, fs, config, new JSONFormatConfig());
+  public JSONFormatPlugin(String name, DrillbitContext context, DrillFileSystem fs, StoragePluginConfig storageConfig) {
+    this(name, context, fs, storageConfig, new JSONFormatConfig());
   }
   
-  public JSONFormatPlugin(DrillbitContext context, DrillFileSystem fs, DrillFileSystem config, JSONFormatConfig formatPluginConfig) {
-    super(context, fs, config, formatPluginConfig, true, false, false, "json", "json");
+  public JSONFormatPlugin(String name, DrillbitContext context, DrillFileSystem fs, StoragePluginConfig config, JSONFormatConfig formatPluginConfig) {
+    super(name, context, fs, config, formatPluginConfig, true, false, false, "json", "json");
   }
   
   @Override
@@ -51,5 +52,22 @@ public class JSONFormatPlugin extends EasyFormatPlugin<JSONFormatConfig> {
 
   @JsonTypeName("json")
   public static class JSONFormatConfig implements FormatPluginConfig {
+
+    @Override
+    public int hashCode() {
+      return 31;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+      if (this == obj)
+        return true;
+      if (obj == null)
+        return false;
+      if (getClass() == obj.getClass())
+        return true;
+      return false;
+    }
+    
   }
 }

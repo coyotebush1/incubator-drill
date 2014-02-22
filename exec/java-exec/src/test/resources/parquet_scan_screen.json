@@ -21,7 +21,8 @@
       memo:"initial_scan",
       storageengine:"dfs",
       selection: {
-        paths: ["/tmp/test.parquet"]
+        format: {type: "parquet"},
+        files: ["/tmp/test.parquet"]
       }
     },
     {

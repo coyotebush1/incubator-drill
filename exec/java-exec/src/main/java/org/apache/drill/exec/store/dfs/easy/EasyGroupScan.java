@@ -1,3 +1,20 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.drill.exec.store.dfs.easy;
 
 import java.io.IOException;
@@ -25,12 +42,14 @@ import org.apache.drill.exec.store.schedule.CompleteFileWork.FileWorkImpl;
 
 import com.beust.jcommander.internal.Lists;
 import com.fasterxml.jackson.annotation.JacksonInject;
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonTypeName;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ListMultimap;
 
-@JsonTypeName("easy")
+@JsonTypeName("fs-scan")
 public class EasyGroupScan extends AbstractGroupScan{
   static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(EasyGroupScan.class);
 
@@ -43,9 +62,10 @@ public class EasyGroupScan extends AbstractGroupScan{
   private ListMultimap<Integer, CompleteFileWork> mappings;
   private List<CompleteFileWork> chunks;
   private List<EndpointAffinity> endpointAffinities;
-  
+
+  @JsonCreator
   public EasyGroupScan(
-      @JsonProperty("files") FileSelection selection, //
+      @JsonProperty("files") List<String> files, //
       @JsonProperty("storage") StoragePluginConfig storageConfig, //
       @JsonProperty("format") FormatPluginConfig formatConfig, //
       @JacksonInject StoragePluginRegistry engineRegistry, // 
@@ -54,8 +74,21 @@ public class EasyGroupScan extends AbstractGroupScan{
       ) throws IOException, ExecutionSetupException {
     
     this.formatPlugin = (EasyFormatPlugin<?>) engineRegistry.getFormatPlugin(storageConfig, formatConfig);
+    this.selection = new FileSelection(files, true);
+    this.maxWidth = selection.getFileStatusList(formatPlugin.getFileSystem()).size();
+    this.ref = ref;
+    this.columns = columns;
+  }
+  
+  public EasyGroupScan(
+      FileSelection selection, //
+      EasyFormatPlugin<?> formatPlugin, // 
+      FieldReference ref, //
+      List<SchemaPath> columns
+      ) throws IOException{
     this.selection = selection;
     this.maxWidth = selection.getFileStatusList(formatPlugin.getFileSystem()).size();
+    this.formatPlugin = formatPlugin;
     this.ref = ref;
     this.columns = columns;
   }
@@ -76,7 +109,12 @@ public class EasyGroupScan extends AbstractGroupScan{
   }
 
   @JsonProperty("files")
-  public FileSelection getFileSelection() {
+  public List<String> getFiles() {
+    return selection.getAsFiles();
+  }
+  
+  @JsonIgnore
+  public FileSelection getFileSelection(){
     return selection;
   }
   

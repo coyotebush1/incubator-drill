@@ -1,3 +1,20 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.drill.exec.store.dfs;
 
 import java.io.IOException;
@@ -5,6 +22,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+import net.hydromatic.optiq.Schema;
 import net.hydromatic.optiq.SchemaPlus;
 
 import org.apache.drill.common.exceptions.ExecutionSetupException;
@@ -13,6 +31,7 @@ import org.apache.drill.common.logical.data.Scan;
 import org.apache.drill.exec.physical.base.AbstractGroupScan;
 import org.apache.drill.exec.server.DrillbitContext;
 import org.apache.drill.exec.store.AbstractStoragePlugin;
+import org.apache.drill.exec.store.ClassPathFileSystem;
 import org.apache.drill.exec.store.dfs.shim.DrillFileSystem;
 import org.apache.drill.exec.store.dfs.shim.FileSystemCreator;
 import org.apache.hadoop.conf.Configuration;
@@ -43,6 +62,7 @@ public class FileSystemPlugin extends AbstractStoragePlugin{
       
       Configuration fsConf = new Configuration();
       fsConf.set("fs.default.name", config.connection);
+      fsConf.set("fs.classpath.impl", ClassPathFileSystem.class.getName());
       this.fs = FileSystemCreator.getFileSystem(context.getConfig(), fsConf);
       this.formatsByName = FormatCreator.getFormatPlugins(context, fs, config);
       List<FormatMatcher> matchers = Lists.newArrayList();
@@ -76,18 +96,18 @@ public class FileSystemPlugin extends AbstractStoragePlugin{
   public AbstractGroupScan getPhysicalScan(Scan scan) throws IOException {
     FormatSelection formatSelection = scan.getSelection().getWith(context.getConfig(), FormatSelection.class);
     FormatPlugin plugin;
-    if(formatSelection.format instanceof NamedFormatPluginConfig){
-      plugin = formatsByName.get( ((NamedFormatPluginConfig) formatSelection.format).name);
+    if(formatSelection.getFormat() instanceof NamedFormatPluginConfig){
+      plugin = formatsByName.get( ((NamedFormatPluginConfig) formatSelection.getFormat()).name);
     }else{
-      plugin = formatPluginsByConfig.get(formatSelection.format);
+      plugin = formatPluginsByConfig.get(formatSelection.getFormat());
     }
-    if(plugin == null) throw new IOException(String.format("Failure getting requested format plugin named '%s'.  It was not one of the format plugins registered.", formatSelection.format));
-    return plugin.getGroupScan(scan.getOutputReference(), formatSelection.selection);
+    if(plugin == null) throw new IOException(String.format("Failure getting requested format plugin named '%s'.  It was not one of the format plugins registered.", formatSelection.getFormat()));
+    return plugin.getGroupScan(scan.getOutputReference(), formatSelection.getSelection());
   }
   
   @Override
-  public void createAndAddSchema(SchemaPlus parent) {
-    schemaFactory.add(parent);
+  public Schema createAndAddSchema(SchemaPlus parent) {
+    return schemaFactory.add(parent);
   }
   
   public FormatPlugin getFormatPlugin(String name){

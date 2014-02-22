@@ -92,6 +92,7 @@ public class MockGroupScanPOP extends AbstractGroupScan {
       this.recordSize = size;
     }
 
+    @JsonIgnore
     public OperatorCost getCost() {
       return new OperatorCost(1, 2, 1, 1);
     }
@@ -104,6 +105,7 @@ public class MockGroupScanPOP extends AbstractGroupScan {
       return types;
     }
 
+    @JsonIgnore
     public Size getSize() {
       return new Size(records, recordSize);
     }

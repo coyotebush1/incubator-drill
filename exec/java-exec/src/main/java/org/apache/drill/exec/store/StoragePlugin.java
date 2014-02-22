@@ -43,6 +43,6 @@ public interface StoragePlugin {
    */
   public AbstractGroupScan getPhysicalScan(Scan scan) throws IOException;
   
-  public void createAndAddSchema(SchemaPlus parent);
+  public Schema createAndAddSchema(SchemaPlus parent);
 
 }

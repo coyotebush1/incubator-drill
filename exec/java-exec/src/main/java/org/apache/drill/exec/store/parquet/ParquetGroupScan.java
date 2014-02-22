@@ -77,6 +77,7 @@ public class ParquetGroupScan extends AbstractGroupScan {
   static final String ENDPOINT_BYTES_TIMER = MetricRegistry.name(ParquetGroupScan.class, "endpointBytes");
   static final String ASSIGNMENT_TIMER = MetricRegistry.name(ParquetGroupScan.class, "applyAssignments");
   static final String ASSIGNMENT_AFFINITY_HIST = MetricRegistry.name(ParquetGroupScan.class, "assignmentAffinity");
+  
   final Histogram assignmentAffinityStats = metrics.histogram(ASSIGNMENT_AFFINITY_HIST);
 
   private ListMultimap<Integer, RowGroupInfo> mappings;
@@ -111,8 +112,11 @@ public class ParquetGroupScan extends AbstractGroupScan {
       ) throws IOException, ExecutionSetupException {
     engineRegistry.init(DrillConfig.create());
     this.columns = columns;
-    FileSystemPlugin plugin = (FileSystemPlugin) engineRegistry.getEngine(storageConfig);
-    this.formatPlugin = (ParquetFormatPlugin) plugin.getFormatPlugin(formatConfig);
+    if(formatConfig == null) formatConfig = new ParquetFormatConfig();
+    Preconditions.checkNotNull(storageConfig);
+    Preconditions.checkNotNull(formatConfig);
+    this.formatPlugin = (ParquetFormatPlugin) engineRegistry.getFormatPlugin(storageConfig, formatConfig);
+    Preconditions.checkNotNull(formatPlugin);
     this.fs = formatPlugin.getFileSystem().getUnderlying();
     this.formatConfig = formatPlugin.getConfig();
     this.entries = entries;

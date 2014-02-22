@@ -1,3 +1,20 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.drill.exec.store.dfs;
 
 import java.io.IOException;
@@ -11,7 +28,6 @@ import org.apache.hadoop.fs.Path;
 
 import com.beust.jcommander.internal.Lists;
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.fasterxml.jackson.annotation.JsonProperty;
 
 /**
  * Jackson serializable description of a file selection. Maintains an internal set of file statuses. However, also
@@ -24,17 +40,21 @@ public class FileSelection {
   @JsonIgnore
   private List<FileStatus> statuses;
 
-  @JsonProperty
-  public List<String> paths;
+  public List<String> files;
 
   public FileSelection() {
+  }
+  
+  
+  public FileSelection(List<String> files, boolean dummy){
+    this.files = files;
   }
 
   public FileSelection(List<FileStatus> statuses) {
     this.statuses = statuses;
-    this.paths = Lists.newArrayList();
+    this.files = Lists.newArrayList();
     for (FileStatus f : statuses) {
-      paths.add(f.getPath().toString());
+      files.add(f.getPath().toString());
     }
   }
 
@@ -68,10 +88,20 @@ public class FileSelection {
     return statuses.get(0);
   }
 
+  public List<String> getAsFiles(){
+    if(!files.isEmpty()) return files;
+    if(statuses == null) return Collections.emptyList();
+    List<String> files = Lists.newArrayList();
+    for(FileStatus s : statuses){
+      files.add(s.getPath().toString());
+    }
+    return files;
+  }
+  
   private void init(DrillFileSystem fs) throws IOException {
-    if (paths != null && statuses == null) {
+    if (files != null && statuses == null) {
       statuses = Lists.newArrayList();
-      for (String p : paths) {
+      for (String p : files) {
         statuses.add(fs.getFileStatus(new Path(p)));
       }
     }

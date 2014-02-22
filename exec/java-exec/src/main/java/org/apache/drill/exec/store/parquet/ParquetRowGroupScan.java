@@ -60,13 +60,16 @@ public class ParquetRowGroupScan extends AbstractBase implements SubScan {
       @JacksonInject StoragePluginRegistry registry, //
       @JsonProperty("storage") StoragePluginConfig storageConfig, //
       @JsonProperty("format") FormatPluginConfig formatConfig, //
-      @JsonProperty("rowGroupReadEntries") LinkedList<RowGroupReadEntry> rowGroupReadEntries, //
+      @JsonProperty("entries") LinkedList<RowGroupReadEntry> rowGroupReadEntries, //
       @JsonProperty("ref") FieldReference ref, //
       @JsonProperty("columns") List<SchemaPath> columns //
   ) throws ExecutionSetupException {
 
-    FileSystemPlugin plugin = (FileSystemPlugin) registry.getEngine(storageConfig);
-    this.formatPlugin = (ParquetFormatPlugin) plugin.getFormatPlugin(formatConfig);
+    if(formatConfig == null) formatConfig = new ParquetFormatConfig();
+    Preconditions.checkNotNull(storageConfig);
+    Preconditions.checkNotNull(formatConfig);
+    this.formatPlugin = (ParquetFormatPlugin) registry.getFormatPlugin(storageConfig, formatConfig);
+    Preconditions.checkNotNull(formatPlugin);
     this.rowGroupReadEntries = rowGroupReadEntries;
     this.formatConfig = formatPlugin.getConfig();
     this.ref = ref;
@@ -85,10 +88,12 @@ public class ParquetRowGroupScan extends AbstractBase implements SubScan {
     this.columns = columns;
   }
 
+  @JsonProperty("entries")
   public List<RowGroupReadEntry> getRowGroupReadEntries() {
     return rowGroupReadEntries;
   }
 
+  @JsonProperty("storage")
   public StoragePluginConfig getEngineConfig() {
     return formatPlugin.getStorageConfig();
   }

@@ -108,7 +108,7 @@ public class ParquetRecordReaderTest {
     // number of times to read the file
     int i = 3;
     for (int j = 0; j < i; j++){
-      readEntries += "{path: \""+fileName+"\"}";
+      readEntries += "\""+fileName+"\"";
       if (j < i - 1)
         readEntries += ",";
     }
@@ -320,11 +320,11 @@ public class ParquetRecordReaderTest {
     // number of times to read the file
     int i = 3;
     for (int j = 0; j < i; j++){
-      readEntries += "{path: \"/tmp/test.parquet\"}";
+      readEntries += "\"/tmp/test.parquet\"";
       if (j < i - 1)
         readEntries += ",";
     }
-    testParquetFullEngineEventBased(true, "/parquet_scan_screen_read_entry_replace.json", readEntries,
+    testParquetFullEngineEventBased(true, "/parquet/parquet_scan_screen_read_entry_replace.json", readEntries,
         "/tmp/test.parquet", i, props);
   }
 

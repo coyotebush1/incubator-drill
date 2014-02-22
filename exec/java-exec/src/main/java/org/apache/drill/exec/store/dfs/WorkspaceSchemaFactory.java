@@ -18,7 +18,6 @@
 package org.apache.drill.exec.store.dfs;
 
 import java.io.IOException;
-import java.net.URISyntaxException;
 import java.util.List;
 import java.util.Set;
 
@@ -39,7 +38,7 @@ public class WorkspaceSchemaFactory implements ExpandingConcurrentMap.MapValueFa
   private ExpandingConcurrentMap<String, DrillTable> tables = new ExpandingConcurrentMap<String, DrillTable>(this);
   private final List<FormatMatcher> fileMatchers;
   private final List<FormatMatcher> dirMatchers;
-  
+
   private final Path root;
   private final DrillFileSystem fs;
   private final String storageEngineName;
@@ -51,8 +50,8 @@ public class WorkspaceSchemaFactory implements ExpandingConcurrentMap.MapValueFa
     this.root = new Path(path);
     this.fileMatchers = Lists.newArrayList();
     this.dirMatchers = Lists.newArrayList();
-    for(FormatMatcher m : formatMatchers){
-      if(m.supportDirectoryReads()){
+    for (FormatMatcher m : formatMatchers) {
+      if (m.supportDirectoryReads()) {
         dirMatchers.add(m);
       }
       fileMatchers.add(m);
@@ -64,23 +63,30 @@ public class WorkspaceSchemaFactory implements ExpandingConcurrentMap.MapValueFa
   public WorkspaceSchema create(SchemaHolder holder) {
     return new WorkspaceSchema(holder, schemaName);
   }
-  
+
   @Override
   public DrillTable create(String key) {
     try {
+
       FileSelection fileSelection = FileSelection.create(fs, root, key);
-      
-      if(fileSelection.containsDirectories(fs)){
-        for(FormatMatcher m : dirMatchers){
-          Object selection = m.isReadable(fileSelection);
-          if(selection != null) return new DynamicDrillTable(storageEngineName, selection, m.getFormatPlugin().getStorageConfig());
+
+      if (fileSelection.containsDirectories(fs)) {
+        for (FormatMatcher m : dirMatchers) {
+          try {
+            Object selection = m.isReadable(fileSelection);
+            if (selection != null)
+              return new DynamicDrillTable(storageEngineName, selection, m.getFormatPlugin().getStorageConfig());
+          } catch (IOException e) {
+            logger.debug("File read failed.", e);
+          }
         }
         fileSelection = fileSelection.minusDirectorries(fs);
       }
-      
-      for(FormatMatcher m : dirMatchers){
+
+      for (FormatMatcher m : fileMatchers) {
         Object selection = m.isReadable(fileSelection);
-        if(selection != null) return new DynamicDrillTable(storageEngineName, selection, m.getFormatPlugin().getStorageConfig());
+        if (selection != null)
+          return new DynamicDrillTable(storageEngineName, selection, m.getFormatPlugin().getStorageConfig());
       }
       return null;
 
@@ -112,7 +118,5 @@ public class WorkspaceSchemaFactory implements ExpandingConcurrentMap.MapValueFa
     }
 
   }
-
-
 
 }
