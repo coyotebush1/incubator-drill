@@ -17,6 +17,7 @@
  */
 package org.apache.drill.jdbc.test;
 
+import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
@@ -40,8 +41,10 @@ public class TestJdbcQuery {
   // Set a timeout unless we're debugging.
   @Rule public TestRule TIMEOUT = TestTools.getTimeoutRule(20000);
 
+  private static final String WORKING_PATH;
   static{
     Driver.load();
+    WORKING_PATH = Paths.get("").toAbsolutePath().toString();
   }
   
   @Test
@@ -57,26 +60,26 @@ public class TestJdbcQuery {
   
   @Test 
   public void testCast() throws Exception{
-    testQuery("select R_REGIONKEY, cast(R_NAME as varchar(15)) as region, cast(R_COMMENT as varchar(255)) as comment from dfs.`/Users/jnadeau/region.parquet`");    
+    testQuery(String.format("select R_REGIONKEY, cast(R_NAME as varchar(15)) as region, cast(R_COMMENT as varchar(255)) as comment from dfs.`%s/../sample-data/region.parquet`", WORKING_PATH));    
   }
   @Test 
   public void testWildcard() throws Exception{
-    testQuery("select * from dfs.`/Users/jnadeau/region.parquet`");
+    testQuery(String.format("select * from dfs.`%s/../sample-data/region.parquet`", WORKING_PATH));
   }
   
   @Test 
   public void testLogicalExplain() throws Exception{
-    testQuery("EXPLAIN PLAN WITHOUT IMPLEMENTATION FOR select * from dfs.`/Users/jnadeau/region.parquet`");
+    testQuery(String.format("EXPLAIN PLAN WITHOUT IMPLEMENTATION FOR select * from dfs.`%s/../sample-data/region.parquet`", WORKING_PATH));
   }
 
   @Test 
   public void testPhysicalExplain() throws Exception{
-    testQuery("EXPLAIN PLAN FOR select * from dfs.`/Users/jnadeau/region.parquet`");
+    testQuery(String.format("EXPLAIN PLAN FOR select * from dfs.`%s/../sample-data/region.parquet`", WORKING_PATH));
   }
   
   @Test 
   public void checkUnknownColumn() throws Exception{
-    testQuery("select unknownColumn from dfs.`/Users/jnadeau/region.parquet`");
+    testQuery(String.format("SELECT unknownColumn FROM dfs.`%s/../sample-data/region.parquet`", WORKING_PATH));
   }
 
   

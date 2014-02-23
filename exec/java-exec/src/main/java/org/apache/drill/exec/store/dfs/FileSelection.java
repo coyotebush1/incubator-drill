@@ -26,8 +26,8 @@ import org.apache.drill.exec.store.dfs.shim.DrillFileSystem;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 
-import com.beust.jcommander.internal.Lists;
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.google.common.collect.Lists;
 
 /**
  * Jackson serializable description of a file selection. Maintains an internal set of file statuses. However, also
@@ -113,12 +113,13 @@ public class FileSelection {
   }
 
   public static FileSelection create(DrillFileSystem fs, Path parent, String path) throws IOException {
-    if (Pattern.quote(path).equals(path)) {
+    if ( !(path.contains("*") || path.contains("?")) ) {
       Path p = new Path(parent, path);
       FileStatus status = fs.getFileStatus(p);
       return new FileSelection(Collections.singletonList(status));
     } else {
       FileStatus[] status = fs.getUnderlying().globStatus(new Path(parent, path));
+      if(status == null || status.length == 0) return null;
       return new FileSelection(Lists.newArrayList(status));
     }
   }

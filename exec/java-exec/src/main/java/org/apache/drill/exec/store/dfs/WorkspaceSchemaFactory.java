@@ -69,7 +69,8 @@ public class WorkspaceSchemaFactory implements ExpandingConcurrentMap.MapValueFa
     try {
 
       FileSelection fileSelection = FileSelection.create(fs, root, key);
-
+      if(fileSelection == null) return null;
+      
       if (fileSelection.containsDirectories(fs)) {
         for (FormatMatcher m : dirMatchers) {
           try {
