@@ -31,6 +31,7 @@ import org.apache.drill.exec.planner.logical.DrillTable;
 import org.apache.drill.exec.store.AbstractSchema;
 import org.apache.drill.exec.store.SchemaFactory;
 import org.apache.drill.exec.store.SchemaHolder;
+import org.apache.drill.exec.store.dfs.WorkspaceSchemaFactory.WorkspaceSchema;
 import org.apache.drill.exec.store.hive.HiveReadEntry;
 import org.apache.drill.exec.store.hive.HiveStoragePluginConfig;
 import org.apache.drill.exec.store.hive.HiveTable;
@@ -174,13 +175,13 @@ public class HiveSchemaFactory implements SchemaFactory {
   public Schema add(SchemaPlus parent) {
     HiveSchema schema = new HiveSchema(new SchemaHolder(parent), schemaName);
     SchemaPlus hPlus = parent.add(schema);
-    schema.holder.setSchema(hPlus);
+    schema.setHolder(hPlus);
     return schema;
   }
 
   class HiveSchema extends AbstractSchema {
 
-    public final SchemaHolder holder = new SchemaHolder();
+    private final SchemaHolder holder = new SchemaHolder();
 
     private HiveDatabaseSchema defaultSchema;
     
@@ -205,6 +206,15 @@ public class HiveSchemaFactory implements SchemaFactory {
       }
       
     }
+    
+
+    void setHolder(SchemaPlus plusOfThis){
+      holder.setSchema(plusOfThis);
+      for(String s : getSubSchemaNames()){
+        plusOfThis.add(getSubSchema(s));
+      }
+    }
+    
 
     @Override
     public Set<String> getSubSchemaNames() {

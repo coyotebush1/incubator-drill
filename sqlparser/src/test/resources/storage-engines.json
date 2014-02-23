@@ -2,7 +2,11 @@
   "storage":{
     dfs: {
       type: "file",
-      connection: "file:///"
+      connection: "file:///",
+      workspaces: {
+        default: "/",
+        home: "/"
+      }
     },
     cp: {
       type: "file",

@@ -27,6 +27,7 @@ import java.util.concurrent.TimeUnit;
 
 import org.apache.drill.common.util.TestTools;
 import org.apache.drill.jdbc.Driver;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TestRule;
@@ -53,6 +54,12 @@ public class TestJdbcQuery {
   }
 
   @Test
+  @Ignore // something not working here.
+  public void testHiveReadWithDb() throws Exception{
+    testQuery("select * from hive.`default`.kv_text");
+  }
+
+  @Test
   public void testJsonQuery() throws Exception{
     testQuery("select * from cp.`employee.json`");
   }
@@ -62,6 +69,12 @@ public class TestJdbcQuery {
   public void testCast() throws Exception{
     testQuery(String.format("select R_REGIONKEY, cast(R_NAME as varchar(15)) as region, cast(R_COMMENT as varchar(255)) as comment from dfs.`%s/../sample-data/region.parquet`", WORKING_PATH));    
   }
+
+  @Test 
+  public void testWorkspace() throws Exception{
+    testQuery(String.format("select * from dfs.home.`%s/../sample-data/region.parquet`", WORKING_PATH));
+  }
+
   @Test 
   public void testWildcard() throws Exception{
     testQuery(String.format("select * from dfs.`%s/../sample-data/region.parquet`", WORKING_PATH));

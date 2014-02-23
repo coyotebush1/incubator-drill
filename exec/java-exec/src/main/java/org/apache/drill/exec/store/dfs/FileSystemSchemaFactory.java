@@ -54,7 +54,7 @@ public class FileSystemSchemaFactory implements SchemaFactory{
   @Override
   public Schema add(SchemaPlus parent) {
     FileSystemSchema schema = new FileSystemSchema(parent, schemaName);
-    schema.selfHolder.setSchema(parent.add(schema));
+    schema.setHolder(parent.add(schema));
     return schema;
   }
 
@@ -74,6 +74,13 @@ public class FileSystemSchemaFactory implements SchemaFactory{
       defaultSchema = schemaMap.get("default");
     }
 
+    void setHolder(SchemaPlus plusOfThis){
+      selfHolder.setSchema(plusOfThis);
+      for(WorkspaceSchema s : schemaMap.values()){
+        plusOfThis.add(s);
+      }
+    }
+    
     @Override
     public DrillTable getTable(String name) {
       return defaultSchema.getTable(name);
