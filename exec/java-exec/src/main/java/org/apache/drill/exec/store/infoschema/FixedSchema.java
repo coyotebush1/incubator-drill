@@ -43,7 +43,16 @@ import net.hydromatic.optiq.TableFunction;
  * Probably should be part of SchemaPlus interface if different
  * implementations need to be combined together.
  */
-public class FixedSchema implements SchemaPlus {
+
+interface NewSchema {
+  
+}
+
+interface NewSchemaPlus extends NewSchema {
+  
+}
+
+public class FixedSchema implements NewSchemaPlus, SchemaPlus {
 
   String name;
   SchemaPlus parent = null;

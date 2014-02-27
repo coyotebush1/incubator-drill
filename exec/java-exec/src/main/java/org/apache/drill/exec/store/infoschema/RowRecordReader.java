@@ -33,7 +33,7 @@ import org.apache.drill.exec.vector.ValueVector;
  * RowRecordReader is a RecordReader which creates RecordBatchs by
  * reading rows one at a time. The fixed format rows come from a "RowProvider".
  */
-public abstract
+public 
 class RowRecordReader implements RecordReader {
   static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(RowRecordReader.class);
 

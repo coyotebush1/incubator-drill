@@ -223,8 +223,8 @@ public abstract class EmptyVectorSet  implements VectorSet {
    */
   protected static boolean setSafe(ValueVector vector, int index, Object value) {
     switch (vector.getField().getType().getMinorType()) {
-    case INT:       return setSafe((IntVector)vector, index, value);
-    case VARCHAR:   return setSafe((VarCharVector)vector, index, value);
+    case INT:       return setSafe((IntVector)vector, index, (int)value);
+    case VARCHAR:   return setSafe((VarCharVector)vector, index, (String)value);
     default:        return false;
     }
   }
