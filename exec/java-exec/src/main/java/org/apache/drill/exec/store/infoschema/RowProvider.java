@@ -18,10 +18,10 @@
 package org.apache.drill.exec.store.infoschema;
 
 /**
- *
+ * An interface for providing rows of data.
  */
 public interface RowProvider {
-  public Object[] next();
-  public boolean hasNext();
-  public void previous();
+  public Object[] next();  // Fetch the next row of values
+  public boolean hasNext();  // true if there are rows remaining to fetch.
+  public void previous();  // Put back the last row read, so it can be reread. (Only one row can be put back)
 }

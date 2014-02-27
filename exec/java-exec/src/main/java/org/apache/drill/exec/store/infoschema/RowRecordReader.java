@@ -30,10 +30,8 @@ import org.apache.drill.exec.vector.ValueVector;
 
 
 /**
- * RowReader is a data source which creates RecordBatchs by
- * reading rows one at a time. 
- * The fixed format rows are written to the pipe by a RowGenerator.
- * (Note: the "pipe" is currently just a wrapper around a Java List.)
+ * RowRecordReader is a RecordReader which creates RecordBatchs by
+ * reading rows one at a time. The fixed format rows come from a "RowProvider".
  */
 public abstract
 class RowRecordReader implements RecordReader {
@@ -47,7 +45,7 @@ class RowRecordReader implements RecordReader {
   private int bufSize = 64*1024*1024;
   private int maxRowCount;
   /**
-   * Construct a record batch Reader which uses rows from a RowProvider.
+   * Construct a RecordReader which uses rows from a RowProvider and puts them into a set of value vectors.
    * @param context
    * @param vectors
    */

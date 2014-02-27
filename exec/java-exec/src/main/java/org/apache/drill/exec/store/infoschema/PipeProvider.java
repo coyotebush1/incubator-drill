@@ -25,32 +25,52 @@ import java.util.ListIterator;
  * to a an internal pipe, which another class (RowRecordReader) can "read" to
  * build up a record batch.
  * <p>
- * (Note that in our case, a "pipe" is really just a wrapper around a list.)
+ * This class helps work around the situation where the rows cannot be conveniently
+ * be generated one at a time by an iterator. Logically, the "writer" writes rows to the pipe,
+ * while a "reader" reads rows from the pipe. The vocabulary implies two separate threads,
+ * but the current implementation is actually just a wrapper around a List.
  */
 public abstract class PipeProvider implements RowProvider {
   ArrayList<Object[]> pipe = null;
   ListIterator<Object[]> iter;
   
+  /**
+   * Method to generate and write rows to the pipe.
+   */
   abstract void generateRows();
   
+  /**
+   * true if there are rows waiting to be "read".
+   */
   public boolean hasNext() {
     if (pipe == null) {
       pipe = new ArrayList<Object[]>();
       generateRows();
       iter = pipe.listIterator();
     }
-    
     return iter.hasNext();
   }
   
+  /**
+   * Read the next row from the pipe. 
+   * Should only be called after "hasNext" indicates there are more rows.
+   */
   public Object[] next() {
     return iter.next();
   }
   
+  /**
+   * Sometimes, a row cannot be immediately processed. Put the last row back and re-read it next time.
+   */
   public void previous() {
     iter.previous();
   }
   
+  /**
+   * Write a row to the pipe.
+   * @param values - a varargs list of values, in the same order as the RecordReader's value vectors.
+   * @return true if the row was successfully written to the pipe.
+   */
   protected boolean writeRow(Object...values) {
     pipe.add(values);
     return true;

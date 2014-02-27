@@ -23,7 +23,7 @@ import org.apache.drill.exec.memory.BufferAllocator;
 import org.apache.drill.exec.vector.ValueVector;
 
 /**
- *
+ * A collection of value vectors representing the columns in a table.
  */
 public interface VectorSet {
     public void cleanup();
