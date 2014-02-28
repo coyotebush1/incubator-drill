@@ -55,6 +55,10 @@ public class FixedTable extends EmptyVectorSet  {
     this.fieldTypes = fieldTypes;
   }
   
+  public String getName() {
+    return tableName;
+  }
+  
   
   
   /**

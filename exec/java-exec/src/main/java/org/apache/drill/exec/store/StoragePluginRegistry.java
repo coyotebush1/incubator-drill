@@ -50,7 +50,7 @@ import org.apache.drill.exec.store.dfs.FormatPlugin;
 import com.google.common.base.Charsets;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.io.Resources;
-import com.google.hive12.common.collect.Maps;
+
 
 public class StoragePluginRegistry implements Iterable<Map.Entry<String, StoragePlugin>>{
   static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(StoragePluginRegistry.class);
@@ -246,7 +246,7 @@ public class StoragePluginRegistry implements Iterable<Map.Entry<String, Storage
 
   private class OrphanPlus implements SchemaPlus{
 
-    private HashMap<String, SchemaPlus> schemas = Maps.newHashMap();
+    private HashMap<String, SchemaPlus> schemas = new HashMap();
     
     @Override
     public SchemaPlus getParentSchema() {

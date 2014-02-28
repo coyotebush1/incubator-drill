@@ -21,9 +21,6 @@ import net.hydromatic.optiq.Schema;
 import net.hydromatic.optiq.SchemaPlus;
 import net.hydromatic.optiq.Table;
 
-import org.apache.drill.exec.ops.FragmentContext;
-import org.apache.drill.exec.server.DrillbitContext;
-import org.apache.drill.exec.store.StoragePluginRegistry.DrillSchemaFactory;
 import org.eigenbase.reltype.RelDataType;
 import org.eigenbase.reltype.RelDataTypeField;
 import org.eigenbase.sql.type.SqlTypeFactoryImpl;
@@ -45,8 +42,8 @@ public class OptiqProvider  {
    * Provide data for TABLES table.
    */
   static public class Tables extends Abstract { 
-    Tables(FragmentContext context) {
-      super(context);
+    Tables(SchemaPlus root) {
+      super(root);
     }
 
     @Override
@@ -56,19 +53,20 @@ public class OptiqProvider  {
   }
 
 
-
   /**
    * Provide data for SCHEMATA table.
    */
   static public class Schemata extends Abstract {
     @Override
     public boolean visitSchema(String schemaName, Schema schema) {
-      writeRow("DRILL", schemaName, "OWNER");
+      if (schemaName != null && schemaName != "") {
+          writeRow("DRILL", schemaName, "<owner>");
+      }
       return false;
     }
 
-    Schemata(FragmentContext context) {
-      super(context);
+    Schemata(SchemaPlus root) {
+      super(root);
     }
   }
 
@@ -79,26 +77,27 @@ public class OptiqProvider  {
    */
   static public class Columns extends Abstract {
 
-    public Columns(FragmentContext context) {
-      super(context);
+    public Columns(SchemaPlus root) {
+      super(root);
     }
 
     @Override
     public boolean visitField(String schemaName, String tableName, RelDataTypeField field) {
       String columnName = field.getName();
       RelDataType type = field.getType();
+      SqlTypeName sqlType = type.getSqlTypeName();
       
       int position = field.getIndex();
       String nullable;
       if (type.isNullable()) nullable = "YES";
       else                   nullable = "NO";
-      String sqlType = type.getSqlTypeName().getName();
-      int radix = 10;        // TODO: where do we get radix?
-      int charMaxLen = 128;  // TODO: where do we get char length?
-      int scale = type.getScale();
-      int precision = type.getPrecision();
+      String sqlTypeName = sqlType.getName();
+      int radix = (sqlType==sqlType.DECIMAL)?10:-1;        // TODO: where do we get radix?
+      int charMaxLen = -1;  // TODO: where do we get char length?
+      int scale = (sqlType.allowsPrec())?type.getScale(): -1;
+      int precision = (sqlType.allowsScale())?type.getPrecision(): -1;
 
-      writeRow("DRILL", schemaName, tableName, columnName, position, nullable, sqlType, charMaxLen, radix, scale, precision);
+      writeRow("DRILL", schemaName, tableName, columnName, position, nullable, sqlTypeName, charMaxLen, radix, scale, precision);
 
       return false;
     }
@@ -110,8 +109,8 @@ public class OptiqProvider  {
    * Provide data for VIEWS table
    */
   public static class Views extends Abstract {
-    public Views(FragmentContext context) {
-      super(context);
+    public Views(SchemaPlus root) {
+      super(root);
     }
     @Override
     public boolean visitTable(String schemaName, String tableName, Table table) {
@@ -122,7 +121,15 @@ public class OptiqProvider  {
     }
   }
 
-
+  public static class Catalogs extends Abstract {
+    public Catalogs(SchemaPlus root) {
+      super(root);
+    }
+    @Override
+    public void generateRows() {
+      writeRow("DRILL", "The internal metadata used by Drill", "");
+    }
+  }
 
 
   /**
@@ -130,10 +137,10 @@ public class OptiqProvider  {
    * but relies on a subclass to provide a "visit" routine to write out data.
    */
   public static class Abstract extends OptiqScanner {
-    FragmentContext context;
+    SchemaPlus root;
 
-    protected Abstract(FragmentContext context) {
-      this.context = context;
+    protected Abstract(SchemaPlus root) {
+      this.root = root;
     }
 
 
@@ -143,33 +150,9 @@ public class OptiqProvider  {
     @Override
     public void generateRows() {
 
-      // Get the root schema from the context
-      Schema root = getRoot(context); 
-
       // Scan the root schema for subschema, tables, columns.
       scanSchema(root); 
     }
-  }
-
-
-
-  /**
-   * Get the Optiq root schema where all our metadata is contained.
-   * @param context
-   * @return root schema of metadata.
-   * 
-   * Note: if this routine is correct, it should be a method of FragmentContext.
-   *    SchemaPlus root = context.getRootSchema();
-   */
-  static Schema getRoot(FragmentContext context) {
-
-    DrillbitContext db = context.getDrillbitContext();
-    DrillSchemaFactory sf = db.getSchemaFactory();
-
-    SchemaPlus root = new FixedSchema("root");
-    Schema defaultSchema = sf.apply(root);
-
-    return root;
   }
 
 
@@ -211,10 +194,15 @@ public class OptiqProvider  {
      * @param visitor - the methods to invoke at each entity in the schema.
      */
     private void scanSchema(String schemaPath, Schema schema) {
+      
+      // If we have an empty schema path, then don't insert a leading dot.
+      String separator;
+      if (schemaPath == "") separator = "";
+      else                  separator = ".";
 
       // Recursively scan the subschema.
       for (String name: schema.getSubSchemaNames()) {
-        scanSchema(schemaPath + "." + name, schema.getSubSchema(name));
+        scanSchema(schemaPath + separator + name, schema.getSubSchema(name));
       }
 
       // Visit this schema and if requested ...

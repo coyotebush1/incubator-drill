@@ -19,12 +19,10 @@ package org.apache.drill.exec.store.infoschema;
 
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-
 import java.util.ArrayList;
 import java.util.List;
-
+import net.hydromatic.optiq.SchemaPlus;
 import org.apache.drill.common.exceptions.ExecutionSetupException;
-import org.apache.drill.common.types.TypeProtos.MajorType;
 import org.apache.drill.exec.exception.SchemaChangeException;
 import org.apache.drill.exec.memory.TopLevelAllocator;
 import org.apache.drill.exec.ops.FragmentContext;
@@ -36,48 +34,59 @@ import org.junit.Assert;
 import org.junit.Test;
 
 /**
- * Using a test table with two columns, create data and verify it is set in the value vecturs.
+ * Using an mock (orphan) schema, create and display the various information schema tables.
  */
-public class ReadTestTable {
-  
+public class TestMockSchema {
+  SchemaPlus root = OrphanSchema.create();
+
   @Test
-  public void zeroRead() {
-    readTestTable(0);
+  public void testTables() {
+    displayTable(new InfoSchemaTable.Tables(), new OptiqProvider.Tables(root));
   }
   
   @Test
-  public void oneRead() {
-    readTestTable(1);
+  public void testSchemata() {
+    displayTable(new InfoSchemaTable.Schemata(), new OptiqProvider.Schemata(root));
+  }
+  
+  
+  @Test
+  public void testViews() {
+    displayTable(new InfoSchemaTable.Views(), new OptiqProvider.Views(root));
   }
   
   @Test
-  public void smallRead() {
-    readTestTable(10);
+  public void testCatalogs() {
+    displayTable(new InfoSchemaTable.Catalogs(), new OptiqProvider.Catalogs(root));
   }
   
   @Test
-  public void largeRead() {
-    readTestTable(1024*1024);
+  public void testColumns() {
+    displayTable(new InfoSchemaTable.Columns(), new OptiqProvider.Columns(root));
   }
   
   
-  /**
-   * Read record batches from the test table and verify the contents.
-   * @param nrRows - the total number of rows expected.
-   */
-  private void readTestTable(int nrRows) {
-    
-    // Mock up a context with a BufferAllocator
+  private void displayTable(FixedTable table, RowProvider provider) {
+
+    // Set up a mock context
     FragmentContext context = mock(FragmentContext.class);
     when(context.getAllocator()).thenReturn(new TopLevelAllocator());
     
     // Create a RecordReader which reads from the test table.
-    RecordReader reader = new RowRecordReader(context, new TestTable(), new TestProvider(nrRows));
+    RecordReader reader = new RowRecordReader(context, table, provider);
     
-    // Create an output for the RecordReader.
+    // Create an dummy output mutator for the RecordReader.
     TestOutput output = new TestOutput();
     try {reader.setup(output);}
     catch (ExecutionSetupException e) {Assert.fail("reader threw an exception");}
+    
+    // print out headers
+    System.out.printf("\n%20s\n", table.getName());
+    System.out.printf("%10s", "RowNumber");
+    for (ValueVector v: table.getValueVectors()) {
+      System.out.printf(" | %16s", v.getField().getName());
+    }
+    System.out.println();
 
     // Do for each record batch
     int rowNumber = 0;
@@ -87,47 +96,18 @@ public class ReadTestTable {
       
       // Do for each row in the batch
       for (int row=0; row<count; row++, rowNumber++) {
+       
+        // Display the row
+        System.out.printf("%10d", rowNumber);
+        for (ValueVector v: table.getValueVectors()) {
+          System.out.printf(" | %16s", v.getAccessor().getObject(row));
+        }
+        System.out.println();
         
-        // Verify the row has an integer and string containing the row number
-        int intValue = (int)output.get(1, row);
-        String strValue = (String)output.get(0, row);
-        Assert.assertEquals(rowNumber, intValue);
-        Assert.assertEquals(rowNumber, Integer.parseInt(strValue));
       }
     }
-  
-  // Verify we read the correct number of rows.
-  Assert.assertEquals(nrRows, rowNumber);
   }
 
-  
-  /**
-   * Class to define the table we want to create. Two columns - string, integer
-   */
-  static class TestTable extends FixedTable {
-    static final String tableName = "MOCK_TABLE";
-    static final String fieldNames[] = {"STRING_COLUMM", "INTEGER_COLUMN"};
-    static final MajorType fieldTypes[] = {VARCHAR, INT};
-    TestTable() {
-      super(tableName, fieldNames, fieldTypes);
-    }
-  }
-  
-  
-  /**
-   * Class to generate data for the table
-   */
-  static class TestProvider extends PipeProvider {
-    int maxRows;
-    TestProvider(int maxRows) {
-      this.maxRows = maxRows;
-    }
-    void generateRows() {
-      for (int rowNumber=0; rowNumber<maxRows; rowNumber++) {
-        writeRow(Integer.toString(rowNumber), rowNumber);
-      }
-    }
-  }
   
   /** 
    * A dummy OutputMutator so we can examine the contents of the current batch 
