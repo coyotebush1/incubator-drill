@@ -34,9 +34,10 @@ import org.junit.Assert;
 import org.junit.Test;
 
 /**
- * Using an mock (orphan) schema, create and display the various information schema tables.
+ * Using an orphan schema, create and display the various information schema tables.
+ * An "orphan schema" is a stand alone schema which is not (yet?) connected to Optiq.
  */
-public class TestMockSchema {
+public class TestOrphanSchema {
   SchemaPlus root = OrphanSchema.create();
 
   @Test

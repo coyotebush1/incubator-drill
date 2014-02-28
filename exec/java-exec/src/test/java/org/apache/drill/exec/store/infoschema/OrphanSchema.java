@@ -12,7 +12,12 @@ import org.junit.Test;
 
 
 import com.codahale.metrics.MetricRegistry;
-
+/**
+ * OrphanSchema is a stand alone schema tree which is not connected to Optiq.
+ * This class is a refactoring of exec.store.TestOrphanSchema.java. The primary
+ * change is to package a "create()" method for providing a test schema. 
+ * For convenient testing, it mocks up the Drillbit context.
+ */
 public class OrphanSchema {
   static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(OrphanSchema.class);
   
@@ -24,7 +29,7 @@ public class OrphanSchema {
     
     final DrillConfig c = DrillConfig.create();
     
-    // Mock up a context which will get us a schema.
+    // Mock up a context which will allow us to create a schema.
     final DrillbitContext bitContext = mock(DrillbitContext.class);
     when(bitContext.getMetrics()).thenReturn(new MetricRegistry());
     when(bitContext.getAllocator()).thenReturn(new TopLevelAllocator());
@@ -40,7 +45,7 @@ public class OrphanSchema {
   
   /**
    * This test replicates the one in org.apache.drill.exec.server,
-   * but it is worth keeping since this code is refactored to provide a standalone "create()" method.
+   * but it is refactored to provide a standalone "create()" method.
    */
   
   @Test
